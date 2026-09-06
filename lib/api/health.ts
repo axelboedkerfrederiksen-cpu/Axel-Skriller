@@ -1,9 +1,10 @@
 import { apiGet, useMockApi } from '@/lib/api/client';
-import { competitors, offers } from '@/lib/mock/data';
+import { competitors, getMockDataset } from '@/lib/mock/data';
 import type { HealthData } from '@/lib/types';
 
 export async function getHealth(): Promise<HealthData> {
   if (!useMockApi) return apiGet<HealthData>('/api/health');
+  const { offers } = getMockDataset();
   const healthyMonitors = offers.filter(
     (offer) => offer.status === 'healthy',
   ).length;

@@ -47,6 +47,7 @@ export function buildProductComparison(
   product: CustomerProduct,
   offers: CompetitorOffer[],
   events: PriceChangeEvent[] = [],
+  referenceTime = Date.now(),
 ): ProductComparison {
   const cheapestCompetitor = getCheapestOffer(offers);
   const cheapestPrice = cheapestCompetitor?.price ?? null;
@@ -56,7 +57,7 @@ export function buildProductComparison(
     cheapestPrice === null || cheapestPrice === 0
       ? null
       : (differenceAmount! / cheapestPrice) * 100;
-  const recentWindow = Date.now() - 24 * HOUR;
+  const recentWindow = referenceTime - 24 * HOUR;
   const recentEvents = events.filter(
     (event) =>
       event.productId === product.id &&

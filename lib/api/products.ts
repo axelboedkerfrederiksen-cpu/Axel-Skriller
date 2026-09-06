@@ -1,5 +1,5 @@
 import { apiGet, useMockApi } from '@/lib/api/client';
-import { comparisons, events, getMockHistory } from '@/lib/mock/data';
+import { getMockDataset, getMockHistory } from '@/lib/mock/data';
 import type {
   PriceChangeEvent,
   PriceHistoryPoint,
@@ -14,7 +14,7 @@ interface ProductDetailResponse {
 
 export async function getProducts(): Promise<ProductComparison[]> {
   if (!useMockApi) return apiGet<ProductComparison[]>('/api/products');
-  return comparisons;
+  return getMockDataset().comparisons;
 }
 
 export async function getProductDetail(
@@ -29,11 +29,13 @@ export async function getProductDetail(
     ]);
     return { ...detail, history };
   }
+  const referenceTime = Date.now();
+  const { comparisons, events } = getMockDataset(referenceTime);
   const comparison = comparisons.find((item) => item.product.id === id);
   if (!comparison) return null;
   return {
     comparison,
-    history: getMockHistory(id),
+    history: getMockHistory(id, referenceTime),
     events: events.filter((event) => event.productId === id),
   };
 }

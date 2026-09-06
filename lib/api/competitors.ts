@@ -1,9 +1,10 @@
 import { apiGet, useMockApi } from '@/lib/api/client';
-import { comparisons, competitors, offers, products } from '@/lib/mock/data';
+import { competitors, getMockDataset } from '@/lib/mock/data';
 import type { CompetitorSummary } from '@/lib/types';
 
 export async function getCompetitors(): Promise<CompetitorSummary[]> {
   if (!useMockApi) return apiGet<CompetitorSummary[]>('/api/competitors');
+  const { comparisons, offers, products } = getMockDataset();
   return competitors.map((competitor) => {
     const competitorOffers = offers.filter(
       (offer) => offer.competitorId === competitor.id,

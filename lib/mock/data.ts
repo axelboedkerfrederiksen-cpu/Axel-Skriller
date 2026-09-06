@@ -7,9 +7,8 @@ import type {
   PriceHistoryPoint,
 } from '@/lib/types';
 
-const now = Date.now();
-const ago = (hours: number) =>
-  new Date(now - hours * 60 * 60 * 1000).toISOString();
+const hoursAgo = (referenceTime: number, hours: number) =>
+  new Date(referenceTime - hours * 60 * 60 * 1000).toISOString();
 
 export const competitors: Competitor[] = [
   { id: 'northcart', name: 'NorthCart' },
@@ -45,22 +44,28 @@ const productSeeds = [
   ['p-1024', 'Air Quality Monitor', 'HOM-1301', 899],
 ] as const;
 
-export const products: CustomerProduct[] = productSeeds.map(
-  ([id, name, sku, price], index) => ({
+function createProducts(referenceTime: number): CustomerProduct[] {
+  return productSeeds.map(([id, name, sku, price], index) => ({
     id,
     name,
     sku,
     customerPrice: price,
     currency: 'DKK',
     inStock: index !== 18,
-    lastChecked: ago(index === 20 ? 11 : (index % 4) * 0.18 + 0.08),
-  }),
-);
+    lastChecked: hoursAgo(
+      referenceTime,
+      index === 20 ? 11 : (index % 4) * 0.18 + 0.08,
+    ),
+  }));
+}
 
 const priceOffsets = [-0.08, -0.035, 0.025, 0.065];
 
-export const offers: CompetitorOffer[] = products.flatMap(
-  (product, productIndex) =>
+function createOffers(
+  products: CustomerProduct[],
+  referenceTime: number,
+): CompetitorOffer[] {
+  return products.flatMap((product, productIndex) =>
     competitors.map((competitor, competitorIndex) => {
       const directionalShift =
         (((productIndex + competitorIndex * 2) % 7) - 3) * 0.012;
@@ -92,11 +97,12 @@ export const offers: CompetitorOffer[] = products.flatMap(
         currency: 'DKK' as const,
         inStock: (productIndex + competitorIndex * 3) % 13 !== 0,
         productUrl: `https://example.com/${competitor.id}/products/${product.id}`,
-        lastChecked: ago(checkedHours),
+        lastChecked: hoursAgo(referenceTime, checkedHours),
         status: failed ? 'failed' : stale ? 'stale' : 'healthy',
       };
     }),
-);
+  );
+}
 
 const eventSeed: Omit<PriceChangeEvent, 'id' | 'productName' | 'timestamp'>[] =
   [
@@ -166,30 +172,49 @@ const eventSeed: Omit<PriceChangeEvent, 'id' | 'productName' | 'timestamp'>[] =
     },
   ];
 
-export const events: PriceChangeEvent[] = eventSeed.map((event, index) => ({
-  ...event,
-  id: `evt-${index + 1}`,
-  productName:
-    products.find((product) => product.id === event.productId)?.name ??
-    'Product',
-  timestamp: ago([0.35, 1.2, 2.5, 4.2, 7.4, 11, 19, 31][index]),
-}));
+function createEvents(
+  products: CustomerProduct[],
+  referenceTime: number,
+): PriceChangeEvent[] {
+  return eventSeed.map((event, index) => ({
+    ...event,
+    id: `evt-${index + 1}`,
+    productName:
+      products.find((product) => product.id === event.productId)?.name ??
+      'Product',
+    timestamp: hoursAgo(
+      referenceTime,
+      [0.35, 1.2, 2.5, 4.2, 7.4, 11, 19, 31][index],
+    ),
+  }));
+}
 
-export const comparisons = products.map((product) =>
-  buildProductComparison(
-    product,
-    offers.filter((offer) => offer.productId === product.id),
-    events,
-  ),
-);
+export function getMockDataset(referenceTime = Date.now()) {
+  const products = createProducts(referenceTime);
+  const offers = createOffers(products, referenceTime);
+  const events = createEvents(products, referenceTime);
+  const comparisons = products.map((product) =>
+    buildProductComparison(
+      product,
+      offers.filter((offer) => offer.productId === product.id),
+      events,
+      referenceTime,
+    ),
+  );
+  return { products, offers, events, comparisons };
+}
 
-export function getMockHistory(productId: string): PriceHistoryPoint[] {
+export function getMockHistory(
+  productId: string,
+  referenceTime = Date.now(),
+): PriceHistoryPoint[] {
+  const { products, offers } = getMockDataset(referenceTime);
   const product = products.find((item) => item.id === productId);
   if (!product) return [];
   const productOffers = offers.filter((offer) => offer.productId === productId);
   const points: PriceHistoryPoint[] = [];
   for (let day = 20; day >= 0; day -= 2) {
-    const timestamp = ago(day * 24);
+    const timestamp = hoursAgo(referenceTime, day * 24);
     const customerWave = day > 8 ? 1.035 : day > 2 ? 1.015 : 1;
     points.push({
       timestamp,

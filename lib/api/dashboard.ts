@@ -1,9 +1,10 @@
 import { apiGet, useMockApi } from '@/lib/api/client';
-import { comparisons, events, offers } from '@/lib/mock/data';
+import { getMockDataset } from '@/lib/mock/data';
 import type { DashboardData } from '@/lib/types';
 
 export async function getDashboardData(): Promise<DashboardData> {
   if (!useMockApi) return apiGet<DashboardData>('/api/dashboard');
+  const { comparisons, events, offers } = getMockDataset();
   const recentEvents = events.filter(
     (event) =>
       Date.now() - new Date(event.timestamp).getTime() <= 24 * 60 * 60 * 1000,
