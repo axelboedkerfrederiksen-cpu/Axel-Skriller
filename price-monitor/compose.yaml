@@ -1,0 +1,75 @@
+name: price-monitor
+
+x-service-defaults: &service-defaults
+  build: .
+  env_file: .env
+  restart: unless-stopped
+  environment:
+    PRICE_MONITOR_ENVIRONMENT: production
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m,noexec,nosuid
+  volumes:
+    - runtime-data:/app/var
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: price_monitor
+      POSTGRES_USER: price_monitor
+      POSTGRES_PASSWORD: price_monitor
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U price_monitor -d price_monitor"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  migrate:
+    build: .
+    command: ["alembic", "upgrade", "head"]
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - runtime-data:/app/var
+    restart: "no"
+
+  api:
+    <<: *service-defaults
+    command: ["uvicorn", "price_monitor.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  scheduler:
+    <<: *service-defaults
+    command: ["price-monitor", "scheduler"]
+
+  worker:
+    <<: *service-defaults
+    command: ["price-monitor", "worker"]
+
+  # Opt-in developer workflow only. Production repair execution must use a
+  # separately isolated runner/CI boundary as described in docs/architecture.md.
+  repair-worker:
+    <<: *service-defaults
+    profiles: ["development-repair"]
+    environment:
+      PRICE_MONITOR_ENVIRONMENT: development
+    command: ["price-monitor", "repair-worker"]
+
+volumes:
+  postgres-data:
+  runtime-data:

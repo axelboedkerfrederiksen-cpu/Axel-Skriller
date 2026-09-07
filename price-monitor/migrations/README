@@ -1,0 +1,3 @@
+Single-database Alembic migrations for Price Monitor.
+
+Set PRICE_MONITOR_DATABASE_URL to override the local SQLite URL in alembic.ini.

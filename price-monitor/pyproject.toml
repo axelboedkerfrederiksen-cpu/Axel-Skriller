@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "price-monitor"
+version = "0.1.0"
+description = "Deterministic competitor price monitoring with guarded scraper repair workflows"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "alembic>=1.16,<2",
+  "beautifulsoup4>=4.13,<5",
+  "fastapi>=0.116,<1",
+  "httpx>=0.28,<1",
+  "lxml>=5.4,<7",
+  "psycopg[binary]>=3.2,<4",
+  "pydantic-settings>=2.10,<3",
+  "sqlalchemy>=2.0.41,<3",
+  "typer>=0.16,<1",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[project.optional-dependencies]
+ai = ["openai>=2,<3"]
+browser = ["playwright>=1.54,<2"]
+dev = [
+  "mypy>=1.17,<2",
+  "pytest>=8.4,<9",
+  "pytest-cov>=6.2,<8",
+  "ruff>=0.12,<1",
+]
+
+[project.scripts]
+price-monitor = "price_monitor.cli:app"
+
+[tool.vercel]
+entrypoint = "app:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/price_monitor"]
+
+[tool.pytest.ini_options]
+addopts = "-q --strict-markers"
+testpaths = ["tests"]
+markers = [
+  "integration: tests that use database or process boundaries",
+  "live: opt-in tests that access public websites",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]

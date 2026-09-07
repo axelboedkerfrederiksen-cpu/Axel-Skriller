@@ -1,0 +1,28 @@
+{
+  "customer": {
+    "name": "Demo Webshop",
+    "slug": "demo-webshop",
+    "webshop_url": "https://shop.example.com",
+    "default_currency": "GBP"
+  },
+  "competitor": {
+    "name": "Books to Scrape",
+    "base_url": "https://books.toscrape.com",
+    "adapter_key": "books_to_scrape",
+    "fetch_mode": "http",
+    "min_request_interval_ms": 1000,
+    "expected_currency": "GBP"
+  },
+  "products": [
+    {
+      "name": "A Light in the Attic",
+      "sku": "demo-book-1",
+      "competitor_url": "https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html"
+    },
+    {
+      "name": "Tipping the Velvet",
+      "sku": "demo-book-2",
+      "competitor_url": "https://books.toscrape.com/catalogue/tipping-the-velvet_999/index.html"
+    }
+  ]
+}
