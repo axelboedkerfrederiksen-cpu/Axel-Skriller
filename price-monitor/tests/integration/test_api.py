@@ -62,6 +62,24 @@ def test_configured_bearer_token_protects_versioned_api(
     session_factory: sessionmaker[Session], tmp_path: Path
 ) -> None:
     with _authenticated_client(session_factory, tmp_path) as http:
+        homepage = http.get("/")
+        assert homepage.status_code == 200
+        assert homepage.headers["content-type"].startswith("text/html")
+        assert "Price Monitor" in homepage.text
+        assert "Service is online" in homepage.text
+        assert 'href="/docs"' in homepage.text
+        assert 'href="/healthz"' in homepage.text
+        assert "a-secure-test-token-that-is-long-enough" not in homepage.text
+        assert "<script" not in homepage.text
+        assert "https://" not in homepage.text
+        assert homepage.headers["content-security-policy"] == (
+            "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; "
+            "form-action 'none'; frame-ancestors 'none'"
+        )
+        assert homepage.headers["x-frame-options"] == "DENY"
+        assert homepage.headers["x-content-type-options"] == "nosniff"
+        assert homepage.headers["referrer-policy"] == "no-referrer"
+        assert homepage.headers["cache-control"] == "no-store"
         assert http.get("/healthz").status_code == 200
         assert http.get("/readyz").status_code == 200
         assert http.get("/api/v1/customers").status_code == 401
@@ -78,6 +96,23 @@ def test_configured_bearer_token_protects_versioned_api(
         )
         assert response.status_code == 200
         assert response.json() == []
+
+
+def test_homepage_does_not_require_a_database_connection(tmp_path: Path) -> None:
+    unavailable_database = tmp_path / "missing" / "price-monitor.db"
+    settings = Settings(
+        environment="test",
+        database_url=f"sqlite+pysqlite:///{unavailable_database}",
+        artifact_root=tmp_path / "artifacts",
+        adapter_runtime_root=tmp_path / "adapters",
+    )
+
+    with TestClient(create_app(settings)) as http:
+        response = http.get("/")
+
+    assert response.status_code == 200
+    assert "Service is online" in response.text
+    assert not unavailable_database.exists()
 
 
 def test_catalog_queue_and_read_api(session_factory: sessionmaker[Session], tmp_path: Path) -> None:

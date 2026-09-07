@@ -91,7 +91,8 @@ python3 -m venv .venv
 ```
 
 The no-configuration local default is SQLite for developer convenience. Open
-`http://127.0.0.1:8000/docs` for the API. SQLite is not the production store.
+`http://127.0.0.1:8000/` for the service homepage or `http://127.0.0.1:8000/docs` for the API
+workspace. SQLite is not the production store.
 
 When `PRICE_MONITOR_API_TOKEN` is configured, send it to every `/api/v1` route:
 

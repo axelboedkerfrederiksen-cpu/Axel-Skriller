@@ -3,10 +3,11 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import select
 
 from price_monitor.api.dependencies import SessionDep, require_api_token
+from price_monitor.api.home import homepage_response
 from price_monitor.api.router import router
 from price_monitor.config import Settings, get_settings
 from price_monitor.db import create_db_engine, create_schema, create_session_factory
@@ -54,6 +55,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         prefix=runtime_settings.api_prefix,
         dependencies=[Depends(require_api_token)],
     )
+
+    @app.get("/", include_in_schema=False)
+    def home() -> HTMLResponse:
+        return homepage_response()
 
     @app.get("/healthz", include_in_schema=False)
     def live() -> dict[str, str]:
