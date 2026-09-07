@@ -134,7 +134,10 @@ class ScrapeQueue:
             )
             .order_by(ScrapeResult.queued_at, ScrapeResult.id)
             .limit(1)
-            .with_for_update(skip_locked=True)
+            # Lock only the queue row. The eager-loaded relationships use
+            # LEFT OUTER JOINs, which PostgreSQL cannot lock as part of FOR
+            # UPDATE when some related rows may be nullable.
+            .with_for_update(skip_locked=True, of=ScrapeResult)
         )
         if result is None:
             return None
