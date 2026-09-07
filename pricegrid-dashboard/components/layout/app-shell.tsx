@@ -75,7 +75,13 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  isMockData,
+}: {
+  children: React.ReactNode;
+  isMockData: boolean;
+}) {
   const [mobileOpen, setMobileOpen] = useState(false);
   return (
     <div className="min-h-screen bg-[#f5f7fb]">
@@ -92,10 +98,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-50" />
               <span className="relative inline-flex size-2.5 rounded-full bg-emerald-400" />
             </span>
-            Monitoring active
+            {isMockData ? 'Demo monitoring' : 'Price Monitor connected'}
           </div>
           <p className="mt-2 text-xs leading-relaxed text-slate-400">
-            91 of 96 offers updated in the last hour
+            {isMockData
+              ? 'Explore the dashboard with sample prices'
+              : 'Live pricing data from the monitoring backend'}
           </p>
         </div>
         <button
@@ -107,9 +115,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate font-medium text-slate-200">
-              Demo workspace
+              Pricegrid workspace
             </span>
-            <span className="block text-xs text-slate-500">Beta account</span>
+            <span className="block text-xs text-slate-500">
+              {isMockData ? 'Demo account' : 'Connected account'}
+            </span>
           </span>
           <ChevronDown className="size-4 text-slate-500" />
         </button>
@@ -130,12 +140,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <div className="hidden items-center gap-2 text-sm text-slate-500 md:flex">
           <Radio className="size-4 text-emerald-500" />
-          Live monitoring<span className="text-slate-300">·</span>
-          <span>96 competitor offers</span>
+          {isMockData ? 'Demo monitoring' : 'Live monitoring connected'}
         </div>
         <div className="flex items-center gap-3">
           <span className="hidden rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 sm:inline-flex">
-            Demo data
+            {isMockData ? 'Demo data' : 'Live data'}
           </span>
           <button
             type="button"

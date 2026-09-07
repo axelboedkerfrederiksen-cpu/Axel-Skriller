@@ -6,6 +6,17 @@ from pydantic import ValidationError
 from price_monitor.config import Settings
 
 
+def test_migration_database_url_defaults_to_runtime_database() -> None:
+    settings = Settings(database_url="sqlite:///runtime.db")
+    assert settings.effective_migration_database_url == "sqlite:///runtime.db"
+
+    settings = Settings(
+        database_url="postgresql+psycopg://app:password@pooler.example/monitor",
+        migration_database_url="postgresql+psycopg://owner:password@db.example/monitor",
+    )
+    assert settings.effective_migration_database_url.endswith("@db.example/monitor")
+
+
 def test_production_requires_postgres_and_api_token() -> None:
     with pytest.raises(ValidationError, match="PostgreSQL"):
         Settings(environment="production", database_url="sqlite:///local.db")
@@ -14,6 +25,13 @@ def test_production_requires_postgres_and_api_token() -> None:
         Settings(
             environment="production",
             database_url="postgresql+psycopg://user:password@db.example/monitor",
+        )
+
+    with pytest.raises(ValidationError, match="CRON_SECRET"):
+        Settings(
+            environment="production",
+            database_url="postgresql+psycopg://user:password@db.example/monitor",
+            api_token="a-secure-test-token-that-is-long-enough",
         )
 
 

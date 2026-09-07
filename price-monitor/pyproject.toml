@@ -43,6 +43,7 @@ packages = ["src/price_monitor"]
 [tool.pytest.ini_options]
 addopts = "-q --strict-markers"
 testpaths = ["tests"]
+pythonpath = ["src"]
 markers = [
   "integration: tests that use database or process boundaries",
   "live: opt-in tests that access public websites",

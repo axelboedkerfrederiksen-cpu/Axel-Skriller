@@ -2,8 +2,14 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "app.py": {
-      "maxDuration": 60,
+      "maxDuration": 300,
       "excludeFiles": "{tests/**,docs/**,examples/**,migrations/**,src/price_monitor/demo_fixtures/**}"
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/monitor",
+      "schedule": "0 6 * * *"
+    }
+  ]
 }

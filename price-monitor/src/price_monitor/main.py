@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import select
 
+from price_monitor.api.cron_router import router as cron_router
+from price_monitor.api.dashboard_router import router as dashboard_router
 from price_monitor.api.dependencies import SessionDep, require_api_token
 from price_monitor.api.home import homepage_response
 from price_monitor.api.router import router
@@ -50,11 +52,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.db_engine = runtime_engine
     app.state.session_factory = runtime_session_factory
     app.state.adapter_registry = AdapterRegistry(runtime_settings.adapter_runtime_root)
+    api_router = APIRouter()
+    api_router.include_router(router)
+    api_router.include_router(dashboard_router)
     app.include_router(
-        router,
+        api_router,
         prefix=runtime_settings.api_prefix,
         dependencies=[Depends(require_api_token)],
     )
+    app.include_router(cron_router)
 
     @app.get("/", include_in_schema=False)
     def home() -> HTMLResponse:

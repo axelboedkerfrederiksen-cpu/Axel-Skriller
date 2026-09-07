@@ -72,7 +72,7 @@ function createOffers(
       const customerAdvantage = productIndex % 6 === 4 ? 0.12 : 0;
       const price =
         Math.round(
-          (product.customerPrice *
+          (product.customerPrice! *
             (1 +
               priceOffsets[competitorIndex] +
               directionalShift +
@@ -104,73 +104,75 @@ function createOffers(
   );
 }
 
-const eventSeed: Omit<PriceChangeEvent, 'id' | 'productName' | 'timestamp'>[] =
-  [
-    {
-      productId: 'p-1001',
-      competitorId: 'northcart',
-      competitorName: 'NorthCart',
-      oldPrice: 1799,
-      newPrice: 1699,
-      percentageChange: -5.6,
-      eventType: 'price_drop',
-    },
-    {
-      productId: 'p-1006',
-      competitorId: 'marketlane',
-      competitorName: 'MarketLane',
-      oldPrice: 3299,
-      newPrice: 3099,
-      percentageChange: -6.1,
-      eventType: 'price_drop',
-    },
-    {
-      productId: 'p-1014',
-      competitorId: 'urbanbuy',
-      competitorName: 'UrbanBuy',
-      oldPrice: 1349,
-      newPrice: 1399,
-      percentageChange: 3.7,
-      eventType: 'price_increase',
-    },
-    {
-      productId: 'p-1003',
-      competitorId: 'shopnova',
-      competitorName: 'ShopNova',
-      oldPrice: 2099,
-      newPrice: 1999,
-      percentageChange: -4.8,
-      eventType: 'price_drop',
-    },
-    {
-      productId: 'p-1008',
-      competitorId: 'urbanbuy',
-      competitorName: 'UrbanBuy',
-      eventType: 'out_of_stock',
-    },
-    {
-      productId: 'p-1011',
-      oldPrice: 749,
-      newPrice: 699,
-      percentageChange: -6.7,
-      eventType: 'became_cheapest',
-    },
-    {
-      productId: 'p-1017',
-      competitorId: 'marketlane',
-      competitorName: 'MarketLane',
-      oldPrice: 1499,
-      newPrice: 1549,
-      percentageChange: 3.3,
-      eventType: 'price_increase',
-    },
-    {
-      productId: 'p-1022',
-      competitorId: 'northcart',
-      competitorName: 'NorthCart',
-      eventType: 'back_in_stock',
-    },
-  ];
+const eventSeed: Omit<
+  PriceChangeEvent,
+  'id' | 'productName' | 'timestamp' | 'currency'
+>[] = [
+  {
+    productId: 'p-1001',
+    competitorId: 'northcart',
+    competitorName: 'NorthCart',
+    oldPrice: 1799,
+    newPrice: 1699,
+    percentageChange: -5.6,
+    eventType: 'price_drop',
+  },
+  {
+    productId: 'p-1006',
+    competitorId: 'marketlane',
+    competitorName: 'MarketLane',
+    oldPrice: 3299,
+    newPrice: 3099,
+    percentageChange: -6.1,
+    eventType: 'price_drop',
+  },
+  {
+    productId: 'p-1014',
+    competitorId: 'urbanbuy',
+    competitorName: 'UrbanBuy',
+    oldPrice: 1349,
+    newPrice: 1399,
+    percentageChange: 3.7,
+    eventType: 'price_increase',
+  },
+  {
+    productId: 'p-1003',
+    competitorId: 'shopnova',
+    competitorName: 'ShopNova',
+    oldPrice: 2099,
+    newPrice: 1999,
+    percentageChange: -4.8,
+    eventType: 'price_drop',
+  },
+  {
+    productId: 'p-1008',
+    competitorId: 'urbanbuy',
+    competitorName: 'UrbanBuy',
+    eventType: 'out_of_stock',
+  },
+  {
+    productId: 'p-1011',
+    oldPrice: 749,
+    newPrice: 699,
+    percentageChange: -6.7,
+    eventType: 'became_cheapest',
+  },
+  {
+    productId: 'p-1017',
+    competitorId: 'marketlane',
+    competitorName: 'MarketLane',
+    oldPrice: 1499,
+    newPrice: 1549,
+    percentageChange: 3.3,
+    eventType: 'price_increase',
+  },
+  {
+    productId: 'p-1022',
+    competitorId: 'northcart',
+    competitorName: 'NorthCart',
+    eventType: 'back_in_stock',
+  },
+];
 
 function createEvents(
   products: CustomerProduct[],
@@ -179,6 +181,7 @@ function createEvents(
   return eventSeed.map((event, index) => ({
     ...event,
     id: `evt-${index + 1}`,
+    currency: 'DKK',
     productName:
       products.find((product) => product.id === event.productId)?.name ??
       'Product',
@@ -218,7 +221,7 @@ export function getMockHistory(
     const customerWave = day > 8 ? 1.035 : day > 2 ? 1.015 : 1;
     points.push({
       timestamp,
-      price: Math.round(product.customerPrice * customerWave),
+      price: Math.round(product.customerPrice! * customerWave),
       sourceType: 'customer',
     });
     productOffers.forEach((offer, competitorIndex) => {
@@ -226,7 +229,7 @@ export function getMockHistory(
       const earlierPremium = day > 10 && competitorIndex < 2 ? 0.035 : 0;
       points.push({
         timestamp,
-        price: Math.round(offer.price * (1 + phase + earlierPremium)),
+        price: Math.round(offer.price! * (1 + phase + earlierPremium)),
         sourceType: 'competitor',
         competitorId: offer.competitorId,
         competitorName: offer.competitorName,

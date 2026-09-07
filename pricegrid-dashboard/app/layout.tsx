@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { AppShell } from '@/components/layout/app-shell';
+import { isMockApiEnabled } from '@/lib/api/client';
 import './globals.css';
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] });
@@ -20,7 +21,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
-        <AppShell>{children}</AppShell>
+        <AppShell isMockData={isMockApiEnabled}>{children}</AppShell>
       </body>
     </html>
   );

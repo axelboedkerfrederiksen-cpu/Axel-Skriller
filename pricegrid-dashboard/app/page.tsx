@@ -23,10 +23,15 @@ import {
 
 export default async function OverviewPage() {
   const data = await getDashboardData();
+  const today = new Intl.DateTimeFormat('en-DK', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).format(new Date());
   return (
     <>
       <PageHeader
-        eyebrow="Sunday, 6 September"
+        eyebrow={today}
         title="Pricing overview"
         description="See where your prices stand, what changed, and which products need attention."
         actions={
@@ -129,11 +134,17 @@ export default async function OverviewPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3.5 font-medium tabular-nums text-slate-800">
-                      {formatCurrency(item.customerPrice)}
+                      {formatCurrency(
+                        item.customerPrice,
+                        item.product.currency,
+                      )}
                     </td>
                     <td className="px-4 py-3.5">
                       <span className="font-medium tabular-nums text-slate-800">
-                        {formatCurrency(item.cheapestPrice)}
+                        {formatCurrency(
+                          item.cheapestPrice,
+                          item.product.currency,
+                        )}
                       </span>
                       <span className="mt-0.5 block text-xs text-slate-400">
                         {item.cheapestCompetitor?.competitorName}
@@ -141,7 +152,11 @@ export default async function OverviewPage() {
                     </td>
                     <td className="px-4 py-3.5">
                       <span className="font-semibold tabular-nums text-rose-600">
-                        +{formatCurrency(item.differenceAmount)}
+                        +
+                        {formatCurrency(
+                          item.differenceAmount,
+                          item.product.currency,
+                        )}
                       </span>
                       <span className="ml-1.5 text-xs text-rose-500">
                         {formatPercentage(item.differencePercentage)}
@@ -172,12 +187,16 @@ export default async function OverviewPage() {
                   </span>
                   <span className="mt-1 block text-xs text-slate-400">
                     {item.cheapestCompetitor?.competitorName} ·{' '}
-                    {formatCurrency(item.cheapestPrice)}
+                    {formatCurrency(item.cheapestPrice, item.product.currency)}
                   </span>
                 </span>
                 <span className="shrink-0 text-right">
                   <span className="block text-sm font-semibold tabular-nums text-rose-600">
-                    +{formatCurrency(item.differenceAmount)}
+                    +
+                    {formatCurrency(
+                      item.differenceAmount,
+                      item.product.currency,
+                    )}
                   </span>
                   <span className="mt-1 block text-xs text-rose-500">
                     {formatPercentage(item.differencePercentage)}
@@ -211,7 +230,11 @@ export default async function OverviewPage() {
           </span>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-semibold">Pricing data is current</h2>
+              <h2 className="font-semibold">
+                {data.freshness.status === 'healthy'
+                  ? 'Pricing data is current'
+                  : 'Some pricing data needs attention'}
+              </h2>
               <StatusBadge
                 status={data.freshness.status}
                 className="border-emerald-400/20 bg-emerald-400/10 text-emerald-300"

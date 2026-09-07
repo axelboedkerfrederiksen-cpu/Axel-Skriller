@@ -19,10 +19,13 @@ class Settings(BaseSettings):
 
     environment: Literal["development", "test", "preview", "production"] = "development"
     database_url: str = "sqlite:///./var/price_monitor.db"
+    migration_database_url: str | None = None
     artifact_root: Path = Path("./var/artifacts")
     adapter_runtime_root: Path = Path("./var/adapters")
     api_prefix: str = "/api/v1"
     api_token: SecretStr | None = Field(default=None, min_length=32)
+    cron_secret: SecretStr | None = Field(default=None, min_length=32)
+    cron_max_scrapes: int = Field(default=5, ge=1, le=25)
     ephemeral_demo: bool = False
 
     user_agent: str = "PriceMonitorBeta/0.1 (+mailto:ops@example.invalid)"
@@ -42,6 +45,12 @@ class Settings(BaseSettings):
     scheduler_poll_seconds: float = Field(default=5.0, ge=0.2, le=300)
     worker_lease_seconds: int = Field(default=300, ge=30, le=3_600)
 
+    @property
+    def effective_migration_database_url(self) -> str:
+        """Use a dedicated direct connection for migrations when one is configured."""
+
+        return self.migration_database_url or self.database_url
+
     @model_validator(mode="after")
     def production_requires_postgres(self) -> Settings:
         if self.environment == "production" and not self.database_url.startswith(
@@ -55,6 +64,8 @@ class Settings(BaseSettings):
                 raise ValueError("ephemeral demo storage cannot run in production mode")
             if not self.database_url.startswith("sqlite") or "/tmp/" not in self.database_url:
                 raise ValueError("ephemeral demo storage must use a SQLite database under /tmp")
+        if self.environment == "production" and self.cron_secret is None:
+            raise ValueError("production requires PRICE_MONITOR_CRON_SECRET")
         if self.repair_provider == "openai" and (
             self.openai_repair_model is None or self.openai_api_key is None
         ):

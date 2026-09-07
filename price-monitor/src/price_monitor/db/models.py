@@ -505,6 +505,7 @@ class ScraperHealth(Base):
         ),
         CheckConstraint("recent_failure_count >= 0", name="recent_failures_nonnegative"),
         Index("ix_scraper_health_status", "status"),
+        Index("ix_scraper_health_last_scrape_result_id", "last_scrape_result_id"),
     )
 
     competitor_id: Mapped[uuid.UUID] = mapped_column(
@@ -565,6 +566,7 @@ class RepairAttempt(UUIDPrimaryKeyMixin, Base):
         ),
         UniqueConstraint("lease_token", name="uq_repair_attempts_lease_token"),
         Index("ix_repair_attempts_status_queued", "status", "queued_at"),
+        Index("ix_repair_attempts_trigger_scrape_result_id", "trigger_scrape_result_id"),
         Index(
             "ix_repair_attempts_claimable",
             "status",

@@ -19,8 +19,10 @@ const colors = ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4'];
 
 export function PriceHistoryChart({
   history,
+  currency,
 }: {
   history: PriceHistoryPoint[];
+  currency: string;
 }) {
   const { chartData, series } = useMemo(() => {
     const seriesList = [
@@ -148,7 +150,7 @@ export function PriceHistoryChart({
                   year: 'numeric',
                 }).format(new Date(String(value)))
               }
-              formatter={(value) => formatCurrency(Number(value))}
+              formatter={(value) => formatCurrency(Number(value), currency)}
             />
             <Legend wrapperStyle={{ display: 'none' }} />
             {series.map(
@@ -162,10 +164,10 @@ export function PriceHistoryChart({
                     stroke={item.color}
                     strokeWidth={item.key === 'customer' ? 3 : 2}
                     dot={false}
-                activeDot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
-                connectNulls
-                isAnimationActive={false}
-              />
+                    activeDot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
+                    connectNulls
+                    isAnimationActive={false}
+                  />
                 ),
             )}
           </LineChart>

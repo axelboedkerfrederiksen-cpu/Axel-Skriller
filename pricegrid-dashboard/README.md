@@ -1,6 +1,6 @@
 # Pricegrid dashboard
 
-A customer-facing competitor price-monitoring dashboard built with Next.js-compatible Vinext, React, TypeScript, Tailwind CSS, and Recharts. It contains no scraper, database, authentication, or backend services.
+A customer-facing competitor price-monitoring dashboard built with Next.js-compatible Vinext, React, TypeScript, Tailwind CSS, and Recharts. It consumes Price Monitor's customer-scoped read API and keeps the API credential on the server. Scraping and persistence remain in the separate backend.
 
 ## Included views
 
@@ -46,36 +46,36 @@ Pages and components never import the mock dataset directly. They call functions
 ## Connect the FastAPI backend
 
 1. Copy `.env.example` to `.env.local`.
-2. Set `NEXT_PUBLIC_API_BASE_URL` to the public FastAPI origin.
-3. Set `NEXT_PUBLIC_USE_MOCK_API=false`.
-4. Return the documented JSON shapes from FastAPI, or add a small response mapper inside `lib/api/` if backend field names differ.
-5. Allow the dashboard origin in FastAPI CORS settings.
-6. Restart the frontend after changing environment variables.
+2. Set `PRICE_MONITOR_API_BASE_URL` to the FastAPI origin without a trailing slash.
+3. Set `PRICE_MONITOR_CUSTOMER_ID` to the customer UUID created in Price Monitor.
+4. If the backend has API protection enabled, set `PRICE_MONITOR_API_TOKEN` to the same token.
+5. Set `PRICEGRID_USE_MOCK_API=false` and restart the dashboard.
 
 Example:
 
 ```env
-NEXT_PUBLIC_API_BASE_URL=https://pricing-api.example.com
-NEXT_PUBLIC_USE_MOCK_API=false
+PRICEGRID_USE_MOCK_API=false
+PRICE_MONITOR_API_BASE_URL=https://pricing-api.example.com
+PRICE_MONITOR_CUSTOMER_ID=0f83ee3c-609b-4ada-84c6-4b19a33676f3
+PRICE_MONITOR_API_TOKEN=replace-with-the-backend-token
 ```
 
-All network requests are centralized in `lib/api/client.ts`. The product detail adapter intentionally combines the product detail and history endpoints, so the page still consumes a single `ProductDetailData` object.
+These are server-only variables—none should be prefixed with `NEXT_PUBLIC_`. All requests are centralized in `lib/api/client.ts`, use the bearer token only on the server, and opt out of caching so monitoring updates appear immediately. Browser CORS is not needed because the browser does not call FastAPI directly.
 
 ## Expected backend endpoints
 
-| Method | Endpoint | Expected response |
-| --- | --- | --- |
-| `GET` | `/api/dashboard` | `DashboardData` |
-| `GET` | `/api/products` | `ProductComparison[]` |
-| `GET` | `/api/products/{id}` | `{ comparison: ProductComparison, events: PriceChangeEvent[] }` |
-| `GET` | `/api/products/{id}/history` | `PriceHistoryPoint[]` |
-| `GET` | `/api/competitors` | `CompetitorSummary[]` |
-| `GET` | `/api/health` | `HealthData` |
+| Method | Endpoint                                                        | Expected response     |
+| ------ | --------------------------------------------------------------- | --------------------- |
+| `GET`  | `/api/v1/customers/{customerId}/dashboard`                      | `DashboardData`       |
+| `GET`  | `/api/v1/customers/{customerId}/dashboard/products`             | `ProductComparison[]` |
+| `GET`  | `/api/v1/customers/{customerId}/dashboard/products/{productId}` | `ProductDetailData`   |
+| `GET`  | `/api/v1/customers/{customerId}/dashboard/competitors`          | `CompetitorSummary[]` |
+| `GET`  | `/api/v1/customers/{customerId}/dashboard/health`               | `HealthData`          |
 
-The exact TypeScript contracts live in `lib/types.ts`. Keep identifiers as strings, use ISO 8601 timestamps, and return money as numeric major currency units (for example, `749` means 749 DKK). The UI derives display formatting but expects calculated product comparison fields from the products endpoint. If the FastAPI service returns raw products and offers instead, perform `buildProductComparison()` in the API adapter before returning data to components.
+The FastAPI backend now returns these exact camel-cased contracts. Identifiers are strings, timestamps use ISO 8601, nullable observations stay explicit, and money is represented as numeric major currency units (for example, `749` means 749 DKK).
 
 ## Mock mode
 
-Mock mode is used when `NEXT_PUBLIC_API_BASE_URL` is missing or `NEXT_PUBLIC_USE_MOCK_API` is not explicitly set to `false`. Demo records live only in `lib/mock/data.ts` and include 24 products, four competitors, multiple price events, stock changes, stale checks, failed checks, and 21 days of price history.
+Mock mode is used unless `PRICEGRID_USE_MOCK_API=false` and both the API origin and customer ID are configured. Demo records live only in `lib/mock/data.ts` and include 24 products, four competitors, multiple price events, stock changes, stale checks, failed checks, and 21 days of price history. The navigation clearly labels whether the current deployment is showing demo or live data.
 
 To test an API failure state locally, disable mock mode and point the base URL at an unavailable server. Route-level error handling will show a recoverable customer-facing message.

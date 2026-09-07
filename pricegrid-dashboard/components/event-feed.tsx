@@ -12,9 +12,9 @@ import type { PriceChangeEvent } from '@/lib/types';
 function eventCopy(event: PriceChangeEvent) {
   const source = event.competitorName ?? 'Your store';
   if (event.eventType === 'price_drop')
-    return `${source} lowered the price from ${formatCurrency(event.oldPrice ?? null)} to ${formatCurrency(event.newPrice ?? null)}`;
+    return `${source} lowered the price from ${formatCurrency(event.oldPrice ?? null, event.currency)} to ${formatCurrency(event.newPrice ?? null, event.currency)}`;
   if (event.eventType === 'price_increase')
-    return `${source} raised the price from ${formatCurrency(event.oldPrice ?? null)} to ${formatCurrency(event.newPrice ?? null)}`;
+    return `${source} raised the price from ${formatCurrency(event.oldPrice ?? null, event.currency)} to ${formatCurrency(event.newPrice ?? null, event.currency)}`;
   if (event.eventType === 'out_of_stock') return `${source} went out of stock`;
   if (event.eventType === 'back_in_stock') return `${source} is back in stock`;
   return 'Your store became the cheapest option';

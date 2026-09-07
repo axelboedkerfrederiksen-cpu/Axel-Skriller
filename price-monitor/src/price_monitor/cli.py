@@ -56,7 +56,8 @@ def init_db() -> None:
     """Apply all database migrations."""
 
     settings = get_settings()
-    if settings.database_url.startswith("sqlite"):
+    migration_database_url = settings.effective_migration_database_url
+    if migration_database_url.startswith("sqlite"):
         Path("var").mkdir(parents=True, exist_ok=True)
     config_path = Path(os.getenv("PRICE_MONITOR_ALEMBIC_CONFIG", "alembic.ini")).resolve()
     if not config_path.is_file():
@@ -65,7 +66,7 @@ def init_db() -> None:
             "PRICE_MONITOR_ALEMBIC_CONFIG"
         )
     config = AlembicConfig(config_path)
-    config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
+    config.set_main_option("sqlalchemy.url", migration_database_url.replace("%", "%%"))
     command.upgrade(config, "head")
     typer.echo("Database is at the latest migration.")
 

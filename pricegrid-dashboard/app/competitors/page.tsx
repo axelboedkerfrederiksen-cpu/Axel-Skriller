@@ -24,8 +24,12 @@ export default async function CompetitorsPage() {
     (competitor) => competitor.status === 'healthy',
   ).length;
   const averageSuccess = Math.round(
-    competitors.reduce((sum, competitor) => sum + competitor.successRate, 0) /
-      competitors.length,
+    competitors.length
+      ? competitors.reduce(
+          (sum, competitor) => sum + competitor.successRate,
+          0,
+        ) / competitors.length
+      : 0,
   );
   return (
     <>
@@ -110,7 +114,7 @@ export default async function CompetitorsPage() {
                   <td
                     className={cn(
                       'px-4 py-4 font-semibold tabular-nums',
-                      competitor.averageDifferencePercentage < 0
+                      (competitor.averageDifferencePercentage ?? 0) < 0
                         ? 'text-rose-600'
                         : 'text-emerald-600',
                     )}

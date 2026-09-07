@@ -1,9 +1,14 @@
-import { apiGet, useMockApi } from '@/lib/api/client';
+import {
+  apiGet,
+  customerDashboardPath,
+  isMockApiEnabled,
+} from '@/lib/api/client';
 import { competitors, getMockDataset } from '@/lib/mock/data';
 import type { HealthData } from '@/lib/types';
 
 export async function getHealth(): Promise<HealthData> {
-  if (!useMockApi) return apiGet<HealthData>('/api/health');
+  if (!isMockApiEnabled)
+    return apiGet<HealthData>(customerDashboardPath('/health'));
   const { offers } = getMockDataset();
   const healthyMonitors = offers.filter(
     (offer) => offer.status === 'healthy',
@@ -20,10 +25,11 @@ export async function getHealth(): Promise<HealthData> {
     staleMonitors,
     failedChecks,
     totalMonitors: offers.length,
-    lastSuccessfulUpdate: successful
-      .map((offer) => offer.lastChecked)
-      .sort()
-      .at(-1)!,
+    lastSuccessfulUpdate:
+      successful
+        .map((offer) => offer.lastChecked)
+        .sort()
+        .at(-1) ?? null,
     sites: competitors.map((competitor) => {
       const siteOffers = offers.filter(
         (offer) => offer.competitorId === competitor.id,
@@ -42,12 +48,17 @@ export async function getHealth(): Promise<HealthData> {
         healthyMonitors: healthy,
         staleMonitors: stale,
         failedChecks: failed,
-        lastSuccessfulUpdate: siteOffers
-          .filter((offer) => offer.status !== 'failed')
-          .map((offer) => offer.lastChecked)
-          .sort()
-          .at(-1)!,
-        status: failed ? 'failed' : stale ? 'stale' : 'healthy',
+        lastSuccessfulUpdate:
+          siteOffers
+            .filter((offer) => offer.status !== 'failed')
+            .map((offer) => offer.lastChecked)
+            .sort()
+            .at(-1) ?? null,
+        status: failed
+          ? 'failed'
+          : stale || siteOffers.length === 0
+            ? 'stale'
+            : 'healthy',
       };
     }),
   };

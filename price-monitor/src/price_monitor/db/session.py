@@ -8,7 +8,7 @@ from fastapi import Request
 from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.pool import NullPool, StaticPool
 
 from price_monitor.config import get_settings
 from price_monitor.db.base import Base
@@ -37,6 +37,11 @@ def create_db_engine(
         options["connect_args"] = {"check_same_thread": False}
         if url.database in {None, "", ":memory:"}:
             options["poolclass"] = StaticPool
+    elif url.get_backend_name() == "postgresql" and url.port == 6543:
+        # Supabase transaction pooling is designed for short-lived serverless
+        # clients and does not support session-bound prepared statements.
+        options["poolclass"] = NullPool
+        options["connect_args"] = {"prepare_threshold": None}
 
     db_engine = create_engine(url, **options)
 

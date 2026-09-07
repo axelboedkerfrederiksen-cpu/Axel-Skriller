@@ -10,6 +10,7 @@ standalone Python application in `price-monitor/`.
 ## What is included
 
 - FastAPI catalog and monitoring API
+- Customer-scoped read API shaped for the Pricegrid dashboard
 - PostgreSQL schema, SQLAlchemy 2 models, and Alembic migration
 - Durable PostgreSQL-backed scheduling queue with worker leases
 - Per-site, versioned adapter modules and declarative selector specs
@@ -25,9 +26,9 @@ standalone Python application in `price-monitor/`.
   deployment, and atomic rollback pointers
 - A complete offline demonstration plus an opt-in public live smoke check
 
-Billing, end-user accounts, dashboards, automatic discovery/repricing, and a large AI pricing
-system are intentionally outside this beta. Hosted API access uses one deployment-level bearer
-token; that is an operator boundary, not multi-user authentication.
+Billing, end-user accounts, automatic discovery/repricing, and a large AI pricing system are
+intentionally outside this beta. Hosted API access uses one deployment-level bearer token; that
+is an operator boundary, not multi-user authentication.
 
 ## Architecture
 
@@ -36,14 +37,15 @@ scrape-worker, and repair-worker processes. PostgreSQL is both the system of rec
 the small durable queue, avoiding Redis/Celery and microservice overhead at this stage.
 
 ```text
-scheduler -> queued scrape -> fetch -> site adapter -> validation -> result/history
-                                                           |
-                                                           v
-                                             health + repair task
-                                                           |
-                                     scoped proposal -> isolated tests
-                                                           |
-                                         validate/reject -> deploy/rollback
+competitor sites -> scrape worker -> validation -> PostgreSQL / Supabase
+                                              |                 |
+                                              v                 v
+                                   health + repair flow    FastAPI read API
+                                                                |
+                                                                v
+                                                     Pricegrid dashboard
+
+scheduler ---------------------> durable scrape queue
 ```
 
 Network, browser, repair-provider, and candidate-test work happens outside database
@@ -163,11 +165,36 @@ For production, set `PRICE_MONITOR_REPAIR_RUNNER_IMAGE` and run repair evaluatio
 separate executor or CI boundary. It needs no application secrets or network. Do not mount a
 Docker socket into the API service.
 
+## Supabase PostgreSQL
+
+Supabase can replace the Compose PostgreSQL container without changing the application model.
+It is the shared system of record for the API, scheduler, and workers; the dashboard still talks
+to FastAPI and never receives a database password or Supabase service credential.
+
+1. Create a Supabase project and open its **Connect** panel.
+2. For Vercel, copy the Supavisor **Transaction pooler** URI on port 6543. For an always-on
+   deployment, use the direct URI when IPv6 is available or the Session pooler on port 5432.
+3. Change the URI scheme from `postgresql://` to `postgresql+psycopg://`, URL-encode special
+   characters in the password, and append `?sslmode=require` if it is not already present.
+4. Set `PRICE_MONITOR_DATABASE_URL` to that runtime URI.
+5. Optionally set `PRICE_MONITOR_MIGRATION_DATABASE_URL` to Supabase's direct connection URI.
+   `price-monitor init-db` and Alembic use this value while the running services keep using the
+   pooled runtime URI.
+6. Apply the schema once with `.venv/bin/price-monitor init-db`, then start the API, scheduler,
+   and one or more controlled workers.
+
+Do not use the transaction pooler URI for continuous worker processes. Because this service
+uses direct PostgreSQL connections rather than the Supabase Data API, keep these tables out of an
+exposed API schema or enable suitable RLS/grants before adding any browser-side Supabase access.
+HTML artifacts and generated adapter revisions still need durable object storage in a hosted
+deployment; only relational monitoring data is stored in Supabase by this integration.
+
 ## Vercel deployment boundary
 
-Vercel can host the stateless FastAPI surface from this directory. The thin root `app.py`
-entrypoint is configured in `pyproject.toml`, and `vercel.json` keeps test/demo assets out of the
-Function bundle. Set the Vercel project's Root Directory to `price-monitor`.
+Vercel hosts the FastAPI surface and runs a bounded monitoring batch every day at 06:00 UTC.
+The thin root `app.py` entrypoint is configured in `pyproject.toml`; `vercel.json` defines the
+scheduled call to `/api/cron/monitor` and keeps test/demo assets out of the Function bundle. Set
+the Vercel project's Root Directory to `price-monitor`.
 
 A short-lived CRUD/API preview can run with an explicitly disposable SQLite database under
 `/tmp`:
@@ -179,17 +206,20 @@ PRICE_MONITOR_ARTIFACT_ROOT=/tmp/price-monitor/artifacts
 PRICE_MONITOR_ADAPTER_RUNTIME_ROOT=/tmp/price-monitor/adapters
 PRICE_MONITOR_EPHEMERAL_DEMO=true
 PRICE_MONITOR_API_TOKEN=<at-least-32-random-characters>
+PRICE_MONITOR_CRON_SECRET=<a-different-at-least-32-random-characters>
 ```
 
 This mode only demonstrates the HTTP catalog API. Vercel's `/tmp` filesystem is ephemeral and
 not shared between Function instances, so its catalog, history, artifacts, and repair revisions
-can vanish at any time. Queued scrapes do not run because no continuous worker is attached. The
-app rejects this mode when `PRICE_MONITOR_ENVIRONMENT=production`.
+can vanish at any time. The app rejects this mode when `PRICE_MONITOR_ENVIRONMENT=production`.
 
-For a real deployment, configure a pooled external PostgreSQL URL, apply Alembic migrations as a
-separate release step, and move artifact/spec-version storage to a durable object store. Vercel
-hosts only the API: the continuous scheduler, scrape worker, and repair worker remain on the
-Docker/always-on worker deployment. Do not run those infinite loops as Vercel Functions.
+For a real deployment, configure the Supabase transaction-pooler URL and apply Alembic
+migrations as a separate release step. Each scheduled invocation queues due targets and processes
+at most `PRICE_MONITOR_CRON_MAX_SCRAPES` (default `5`), so no infinite worker runs inside a
+Function. The Hobby plan supports the configured daily schedule; more frequent checks require a
+Vercel plan that supports more frequent cron jobs. Durable HTML artifact and repair-revision
+storage remains a later production hardening step; relational monitoring data is already durable
+in Supabase.
 
 Direct preview release, without a PR or CI publisher, requires Vercel CLI 48.8.0 or newer:
 
@@ -242,6 +272,11 @@ GET  /api/v1/products/{product_id}/price-history
 GET  /api/v1/products/{product_id}/offers
 GET  /api/v1/competitors/{competitor_id}/health
 GET  /api/v1/repair-attempts
+GET  /api/v1/customers/{customer_id}/dashboard
+GET  /api/v1/customers/{customer_id}/dashboard/products
+GET  /api/v1/customers/{customer_id}/dashboard/products/{product_id}
+GET  /api/v1/customers/{customer_id}/dashboard/competitors
+GET  /api/v1/customers/{customer_id}/dashboard/health
 ```
 
 Repair deployment is intentionally CLI-only until an authenticated admin boundary exists.
@@ -276,10 +311,10 @@ prices. A repair corpus needs known-good, newly failing, and holdout cases befor
 
 ## Next priorities
 
-1. Put PostgreSQL, immutable HTML artifacts, and adapter revision pointers on durable hosted
-   storage, then deploy the always-on scheduler and workers beside them.
+1. Put immutable HTML artifacts and adapter revision files on durable hosted storage, then deploy
+   the always-on scheduler and workers beside the Supabase-backed API.
 2. Add per-customer accounts/roles and audit events before replacing the single operator token.
 3. Add a second real competitor adapter and grow the old/new/holdout regression corpus.
 4. Add operational metrics and alerts for queue age, stale leases, rejection rate, repair rate,
    and per-site request budgets.
-5. Add a small read-only customer dashboard only after the monitoring data is trustworthy.
+5. Add customer onboarding and a safe way to keep each webshop's own prices synchronized.

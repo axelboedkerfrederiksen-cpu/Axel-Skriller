@@ -34,7 +34,7 @@ const localBindingConfig = {
     : [],
 };
 
-export default defineConfig(async () => {
+export default defineConfig(async ({ command }) => {
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.
   process.env.WRANGLER_WRITE_LOGS ??= 'false';
@@ -43,12 +43,31 @@ export default defineConfig(async () => {
 
   // Wrangler snapshots its log path while the Cloudflare plugin is imported.
   const { cloudflare } = await import('@cloudflare/vite-plugin');
+  const localRuntimeVariables =
+    command === 'serve'
+      ? Object.fromEntries(
+          [
+            'PRICEGRID_USE_MOCK_API',
+            'PRICE_MONITOR_API_BASE_URL',
+            'PRICE_MONITOR_API_TOKEN',
+            'PRICE_MONITOR_CUSTOMER_ID',
+          ].flatMap((key) => {
+            const value = process.env[key];
+            return value === undefined ? [] : [[key, value]];
+          }),
+        )
+      : {};
 
   return {
     css: { postcss: { plugins: [tailwindcss()] } },
     resolve: {
       // Keep client-only libraries on the same React instance as Vinext.
-      dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+      dedupe: [
+        'react',
+        'react-dom',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+      ],
     },
     server: isCodexSeatbeltSandbox
       ? { watch: { useFsEvents: false, usePolling: true } }
@@ -58,7 +77,7 @@ export default defineConfig(async () => {
       sites(),
       cloudflare({
         viteEnvironment: { name: 'rsc', childEnvironments: ['ssr'] },
-        config: localBindingConfig,
+        config: { ...localBindingConfig, vars: localRuntimeVariables },
       }),
     ],
   };

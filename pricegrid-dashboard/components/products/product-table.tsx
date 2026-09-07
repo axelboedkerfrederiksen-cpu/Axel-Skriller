@@ -66,13 +66,13 @@ const filterOptions: { value: FilterKey; label: string }[] = [
 
 function matchesFilter(item: ProductComparison, filter: FilterKey) {
   if (filter === 'overpriced') return (item.differenceAmount ?? 0) > 0;
-  if (filter === 'cheapest') return item.isCustomerCheapest;
+  if (filter === 'cheapest') return item.isCustomerCheapest === true;
   if (filter === 'dropped') return item.hasRecentCompetitorDrop;
   if (filter === 'increased') return item.hasRecentCompetitorIncrease;
   if (filter === 'out-of-stock')
     return (
-      !item.product.inStock ||
-      item.competitorOffers.some((offer) => !offer.inStock)
+      item.product.inStock === false ||
+      item.competitorOffers.some((offer) => offer.inStock === false)
     );
   if (filter === 'stale') return item.status !== 'healthy';
   return true;
@@ -416,7 +416,10 @@ export function ProductTable({
                       </Link>
                     </TableCell>
                     <TableCell className="font-semibold tabular-nums text-slate-800">
-                      {formatCurrency(item.customerPrice)}
+                      {formatCurrency(
+                        item.customerPrice,
+                        item.product.currency,
+                      )}
                     </TableCell>
                     <TableCell>
                       <span className="font-medium text-slate-700">
@@ -430,7 +433,10 @@ export function ProductTable({
                       )}
                     </TableCell>
                     <TableCell className="font-medium tabular-nums text-slate-700">
-                      {formatCurrency(item.cheapestPrice)}
+                      {formatCurrency(
+                        item.cheapestPrice,
+                        item.product.currency,
+                      )}
                     </TableCell>
                     <TableCell
                       className={cn(
@@ -438,7 +444,10 @@ export function ProductTable({
                         positiveGap ? 'text-rose-600' : 'text-emerald-600',
                       )}
                     >
-                      {formatCurrency(item.differenceAmount)}
+                      {formatCurrency(
+                        item.differenceAmount,
+                        item.product.currency,
+                      )}
                     </TableCell>
                     <TableCell
                       className={cn(
@@ -450,9 +459,13 @@ export function ProductTable({
                     </TableCell>
                     <TableCell>
                       <span className="inline-flex min-w-14 justify-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                        #{item.customerRank} /{' '}
-                        {item.competitorOffers.filter((offer) => offer.inStock)
-                          .length + 1}
+                        {item.customerRank === null
+                          ? '—'
+                          : `#${item.customerRank}`}{' '}
+                        /{' '}
+                        {item.competitorOffers.filter(
+                          (offer) => offer.inStock === true,
+                        ).length + 1}
                       </span>
                     </TableCell>
                     <TableCell>

@@ -18,9 +18,9 @@ export const metadata: Metadata = { title: 'Monitoring' };
 
 export default async function MonitoringPage() {
   const health = await getHealth();
-  const healthyPercentage = Math.round(
-    (health.healthyMonitors / health.totalMonitors) * 100,
-  );
+  const healthyPercentage = health.totalMonitors
+    ? Math.round((health.healthyMonitors / health.totalMonitors) * 100)
+    : 0;
   return (
     <>
       <PageHeader
@@ -110,7 +110,9 @@ export default async function MonitoringPage() {
           {health.sites.map((site) => {
             const total =
               site.healthyMonitors + site.staleMonitors + site.failedChecks;
-            const percentage = Math.round((site.healthyMonitors / total) * 100);
+            const percentage = total
+              ? Math.round((site.healthyMonitors / total) * 100)
+              : 0;
             return (
               <article
                 key={site.id}

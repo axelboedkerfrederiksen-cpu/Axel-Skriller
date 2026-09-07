@@ -11,19 +11,24 @@ const HOUR = 60 * 60 * 1000;
 export function getCheapestOffer(offers: CompetitorOffer[]) {
   return (
     offers
-      .filter((offer) => offer.inStock)
-      .sort((a, b) => a.price - b.price)[0] ?? null
+      .filter((offer) => offer.inStock === true && offer.price !== null)
+      .sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity))[0] ?? null
   );
 }
 
 export function getCustomerRank(
-  customerPrice: number,
+  customerPrice: number | null,
   offers: CompetitorOffer[],
 ) {
+  if (customerPrice === null) return null;
   return (
     1 +
-    offers.filter((offer) => offer.inStock && offer.price < customerPrice)
-      .length
+    offers.filter(
+      (offer) =>
+        offer.inStock === true &&
+        offer.price !== null &&
+        offer.price < customerPrice,
+    ).length
   );
 }
 
@@ -52,11 +57,13 @@ export function buildProductComparison(
   const cheapestCompetitor = getCheapestOffer(offers);
   const cheapestPrice = cheapestCompetitor?.price ?? null;
   const differenceAmount =
-    cheapestPrice === null ? null : product.customerPrice - cheapestPrice;
-  const differencePercentage =
-    cheapestPrice === null || cheapestPrice === 0
+    cheapestPrice === null || product.customerPrice === null
       ? null
-      : (differenceAmount! / cheapestPrice) * 100;
+      : product.customerPrice - cheapestPrice;
+  const differencePercentage =
+    differenceAmount === null || cheapestPrice === null || cheapestPrice === 0
+      ? null
+      : (differenceAmount / cheapestPrice) * 100;
   const recentWindow = referenceTime - 24 * HOUR;
   const recentEvents = events.filter(
     (event) =>
@@ -72,7 +79,8 @@ export function buildProductComparison(
     differenceAmount,
     differencePercentage,
     customerRank: getCustomerRank(product.customerPrice, offers),
-    isCustomerCheapest: differenceAmount === null || differenceAmount <= 0,
+    isCustomerCheapest:
+      differenceAmount === null ? null : differenceAmount <= 0,
     hasRecentCompetitorDrop: recentEvents.some(
       (event) => event.eventType === 'price_drop' && event.competitorId,
     ),
@@ -97,7 +105,8 @@ export function formatPercentage(value: number | null) {
   return `${value > 0 ? '+' : ''}${new Intl.NumberFormat('da-DK', { maximumFractionDigits: 1 }).format(value)}%`;
 }
 
-export function formatRelativeTime(timestamp: string) {
+export function formatRelativeTime(timestamp: string | null) {
+  if (!timestamp) return 'Not checked yet';
   const minutes = Math.max(
     0,
     Math.round((Date.now() - new Date(timestamp).getTime()) / 60000),

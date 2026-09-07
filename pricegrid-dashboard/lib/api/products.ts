@@ -1,33 +1,30 @@
-import { apiGet, useMockApi } from '@/lib/api/client';
+import {
+  ApiError,
+  apiGet,
+  customerDashboardPath,
+  isMockApiEnabled,
+} from '@/lib/api/client';
 import { getMockDataset, getMockHistory } from '@/lib/mock/data';
-import type {
-  PriceChangeEvent,
-  PriceHistoryPoint,
-  ProductComparison,
-  ProductDetailData,
-} from '@/lib/types';
-
-interface ProductDetailResponse {
-  comparison: ProductComparison;
-  events: PriceChangeEvent[];
-}
+import type { ProductComparison, ProductDetailData } from '@/lib/types';
 
 export async function getProducts(): Promise<ProductComparison[]> {
-  if (!useMockApi) return apiGet<ProductComparison[]>('/api/products');
+  if (!isMockApiEnabled)
+    return apiGet<ProductComparison[]>(customerDashboardPath('/products'));
   return getMockDataset().comparisons;
 }
 
 export async function getProductDetail(
   id: string,
 ): Promise<ProductDetailData | null> {
-  if (!useMockApi) {
-    const [detail, history] = await Promise.all([
-      apiGet<ProductDetailResponse>(`/api/products/${encodeURIComponent(id)}`),
-      apiGet<PriceHistoryPoint[]>(
-        `/api/products/${encodeURIComponent(id)}/history`,
-      ),
-    ]);
-    return { ...detail, history };
+  if (!isMockApiEnabled) {
+    try {
+      return await apiGet<ProductDetailData>(
+        customerDashboardPath(`/products/${encodeURIComponent(id)}`),
+      );
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return null;
+      throw error;
+    }
   }
   const referenceTime = Date.now();
   const { comparisons, events } = getMockDataset(referenceTime);

@@ -8,28 +8,39 @@ durable work queue. This avoids Redis, Celery, and service sprawl while retainin
 module boundaries that can be split later.
 
 ```text
-API / scheduler
-      |
-      v
-PostgreSQL queue + catalog -----> scrape worker
-                                      |
-                              trusted fetch policy
-                                      |
-                         site adapter (pure extraction)
-                                      |
-                          trusted validation + history
-                                      |
-                            health / repair task
-                                      |
-                         isolated repair executor
-                                      |
-                         deterministic reviewer
-                                      |
-                         version pointer / rollback
+Pricegrid browser -> dashboard server -> FastAPI read API
+                                            |
+                                            v
+API / scheduler ----------------> PostgreSQL / Supabase <----- scrape worker
+                                                                  |
+                                                          trusted fetch policy
+                                                                  |
+                                                     site adapter (extraction)
+                                                                  |
+                                                      validation + history
+                                                                  |
+                                                        health / repair task
+                                                                  |
+                                                     isolated repair executor
+                                                                  |
+                                                     deterministic reviewer
+                                                                  |
+                                                     version pointer / rollback
 ```
 
 No database transaction is held while making a network request, rendering a browser
 page, calling a repair provider, or executing candidate tests.
+
+## Dashboard boundary
+
+The dashboard never connects to PostgreSQL or Supabase from the browser. Server Components call
+customer-scoped FastAPI read endpoints with the deployment bearer token, then send only rendered
+UI data to the browser. The token and database connection strings are server-only environment
+variables and must never use a public frontend prefix.
+
+The current bearer token authenticates the deployment, not an individual customer. A configured
+dashboard deployment is therefore pinned to one customer UUID. Per-user authentication and
+authorization must be added before one deployment can safely switch between customer accounts.
 
 ## Deterministic path
 

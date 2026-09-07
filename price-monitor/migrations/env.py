@@ -20,8 +20,11 @@ target_metadata = Base.metadata
 
 def configured_database_url() -> str:
     return os.getenv(
-        "PRICE_MONITOR_DATABASE_URL",
-        config.get_main_option("sqlalchemy.url"),
+        "PRICE_MONITOR_MIGRATION_DATABASE_URL",
+        os.getenv(
+            "PRICE_MONITOR_DATABASE_URL",
+            config.get_main_option("sqlalchemy.url"),
+        ),
     )
 
 

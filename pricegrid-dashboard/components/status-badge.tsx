@@ -32,7 +32,14 @@ export function StatusBadge({
   );
 }
 
-export function StockBadge({ inStock }: { inStock: boolean }) {
+export function StockBadge({ inStock }: { inStock: boolean | null }) {
+  if (inStock === null)
+    return (
+      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500">
+        <Clock3 className="size-4" />
+        Stock unknown
+      </span>
+    );
   return (
     <span
       className={cn(

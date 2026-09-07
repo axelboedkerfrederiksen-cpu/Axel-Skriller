@@ -14,18 +14,13 @@ import {
 import { EventFeed } from '@/components/event-feed';
 import { PriceHistoryChart } from '@/components/products/price-history-chart';
 import { StatusBadge, StockBadge } from '@/components/status-badge';
-import { getProductDetail, getProducts } from '@/lib/api/products';
+import { getProductDetail } from '@/lib/api/products';
 import {
   formatCurrency,
   formatPercentage,
   formatRelativeTime,
 } from '@/lib/calculations';
 import { cn } from '@/lib/utils';
-
-export async function generateStaticParams() {
-  const products = await getProducts();
-  return products.map((item) => ({ id: item.product.id }));
-}
 
 export async function generateMetadata({
   params,
@@ -48,7 +43,7 @@ export default async function ProductDetailPage({
   const { comparison, history, events } = detail;
   const product = comparison.product;
   const availableOffers = comparison.competitorOffers.filter(
-    (offer) => offer.inStock,
+    (offer) => offer.inStock === true,
   );
 
   return (
@@ -89,7 +84,7 @@ export default async function ProductDetailPage({
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <p className="text-sm font-medium text-slate-500">Your price</p>
           <p className="mt-3 text-2xl font-semibold tracking-tight tabular-nums text-slate-950">
-            {formatCurrency(product.customerPrice)}
+            {formatCurrency(product.customerPrice, product.currency)}
           </p>
           <div className="mt-2">
             <StockBadge inStock={product.inStock} />
@@ -100,7 +95,7 @@ export default async function ProductDetailPage({
             Cheapest competitor
           </p>
           <p className="mt-3 text-2xl font-semibold tracking-tight tabular-nums text-slate-950">
-            {formatCurrency(comparison.cheapestPrice)}
+            {formatCurrency(comparison.cheapestPrice, product.currency)}
           </p>
           <p className="mt-2 text-sm text-slate-500">
             {comparison.cheapestCompetitor?.competitorName ??
@@ -111,13 +106,15 @@ export default async function ProductDetailPage({
           <p className="text-sm font-medium text-slate-500">Price position</p>
           <div className="mt-3 flex items-center gap-2">
             <span className="text-2xl font-semibold tracking-tight text-slate-950">
-              #{comparison.customerRank}
+              {comparison.customerRank === null
+                ? '—'
+                : `#${comparison.customerRank}`}
             </span>
             {comparison.customerRank === 1 ? (
               <Trophy className="size-5 text-amber-500" />
-            ) : (
+            ) : comparison.customerRank !== null ? (
               <Medal className="size-5 text-blue-500" />
-            )}
+            ) : null}
           </div>
           <p className="mt-2 text-sm text-slate-500">
             Out of {availableOffers.length + 1} available sellers
@@ -138,7 +135,10 @@ export default async function ProductDetailPage({
             ) : (
               <ArrowDownLeft className="size-5" />
             )}
-            {formatCurrency(Math.abs(comparison.differenceAmount ?? 0))}
+            {formatCurrency(
+              Math.abs(comparison.differenceAmount ?? 0),
+              product.currency,
+            )}
           </p>
           <p className="mt-2 text-sm text-slate-500">
             {formatPercentage(comparison.differencePercentage)} versus market
@@ -155,14 +155,14 @@ export default async function ProductDetailPage({
                 Price history
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Compare how each seller’s price moved over the last 21 days.
+                Competitor history with your current price as a reference.
               </p>
             </div>
             <span className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-medium text-slate-600">
               Last 21 days
             </span>
           </div>
-          <PriceHistoryChart history={history} />
+          <PriceHistoryChart history={history} currency={product.currency} />
         </section>
         <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
           <div className="mb-5">
@@ -222,7 +222,7 @@ export default async function ProductDetailPage({
                   </div>
                 </th>
                 <td className="px-4 py-4 font-semibold tabular-nums text-slate-900">
-                  {formatCurrency(product.customerPrice)}
+                  {formatCurrency(product.customerPrice, product.currency)}
                 </td>
                 <td className="px-4 py-4 text-slate-400">—</td>
                 <td className="px-4 py-4">
@@ -239,9 +239,16 @@ export default async function ProductDetailPage({
                 </td>
               </tr>
               {[...comparison.competitorOffers]
-                .sort((a, b) => a.price - b.price)
-                .map((offer, index) => {
-                  const difference = offer.price - product.customerPrice;
+                .sort(
+                  (a, b) =>
+                    (a.price ?? Number.POSITIVE_INFINITY) -
+                    (b.price ?? Number.POSITIVE_INFINITY),
+                )
+                .map((offer) => {
+                  const difference =
+                    offer.price === null || product.customerPrice === null
+                      ? null
+                      : offer.price - product.customerPrice;
                   return (
                     <tr key={offer.id} className="hover:bg-slate-50/60">
                       <th
@@ -257,7 +264,7 @@ export default async function ProductDetailPage({
                             <span className="font-medium text-slate-800">
                               {offer.competitorName}
                             </span>
-                            {index === 0 && offer.inStock && (
+                            {comparison.cheapestCompetitor?.id === offer.id && (
                               <span className="mt-0.5 block text-xs font-medium text-emerald-600">
                                 Cheapest competitor
                               </span>
@@ -266,16 +273,18 @@ export default async function ProductDetailPage({
                         </div>
                       </th>
                       <td className="px-4 py-4 font-semibold tabular-nums text-slate-800">
-                        {formatCurrency(offer.price)}
+                        {formatCurrency(offer.price, offer.currency)}
                       </td>
                       <td
                         className={cn(
                           'px-4 py-4 font-medium tabular-nums',
-                          difference < 0 ? 'text-rose-600' : 'text-emerald-600',
+                          difference !== null && difference < 0
+                            ? 'text-rose-600'
+                            : 'text-emerald-600',
                         )}
                       >
-                        {difference > 0 ? '+' : ''}
-                        {formatCurrency(difference)}
+                        {difference !== null && difference > 0 ? '+' : ''}
+                        {formatCurrency(difference, product.currency)}
                       </td>
                       <td className="px-4 py-4">
                         <StockBadge inStock={offer.inStock} />
