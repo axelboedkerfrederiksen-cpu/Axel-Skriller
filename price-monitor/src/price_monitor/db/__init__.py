@@ -1,5 +1,6 @@
 """Typed persistence models and session helpers."""
 
+from price_monitor.db.alert_models import AlertRule
 from price_monitor.db.base import Base
 from price_monitor.db.models import (
     ALL_MODELS,
@@ -28,6 +29,7 @@ from price_monitor.db.session import (
 
 __all__ = [
     "ALL_MODELS",
+    "AlertRule",
     "Base",
     "Competitor",
     "CompetitorProduct",

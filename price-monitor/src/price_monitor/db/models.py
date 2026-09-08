@@ -27,6 +27,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from price_monitor.db.alert_models import AlertRule
 from price_monitor.db.base import Base
 from price_monitor.db.types import UTCDateTime
 from price_monitor.domain.enums import (
@@ -653,4 +654,5 @@ ALL_MODELS = (
     PriceHistory,
     ScraperHealth,
     RepairAttempt,
+    AlertRule,
 )

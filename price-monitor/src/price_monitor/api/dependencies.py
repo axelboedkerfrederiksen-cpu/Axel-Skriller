@@ -5,6 +5,10 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from price_monitor.api.ui_auth import (
+    request_has_ui_session,
+    require_same_origin_ui_mutation,
+)
 from price_monitor.db.session import get_db_session
 from price_monitor.services.adapter_registry import AdapterRegistry
 
@@ -25,12 +29,19 @@ def require_api_token(
     if configured is None:
         return
     supplied = credentials.credentials if credentials and credentials.scheme == "Bearer" else ""
-    if not hmac.compare_digest(supplied, configured.get_secret_value()):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="valid bearer token required",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    if supplied and hmac.compare_digest(
+        supplied.encode("utf-8"),
+        configured.get_secret_value().encode("utf-8"),
+    ):
+        return
+    if request_has_ui_session(request):
+        require_same_origin_ui_mutation(request)
+        return
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="valid bearer token required",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 SessionDep = Annotated[Session, Depends(get_db_session)]

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="theme-color" content="#f4f3ee">
+    <title>Overview · Price Monitor</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23126b5b'/%3E%3Ctext x='16' y='20' text-anchor='middle' font-family='system-ui,sans-serif' font-size='10' font-weight='800' fill='white'%3EPM%3C/text%3E%3C/svg%3E">
+    <link rel="stylesheet" href="/static/price-monitor/app.css">
+    <script defer src="/static/price-monitor/app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="topbar">
+      <div class="shell header-inner">
+        <a class="brand" href="/" data-nav aria-label="Price Monitor overview">
+          <span class="brand-mark" aria-hidden="true">PM</span>
+          <span>Price Monitor</span>
+        </a>
+        <nav class="primary-nav" aria-label="Primary navigation">
+          <a href="/" data-nav data-route="overview">Overview</a>
+          <a href="/products" data-nav data-route="products">Products</a>
+          <a href="/competitors" data-nav data-route="competitors">Competitors</a>
+          <a href="/alerts" data-nav data-route="alerts">Alerts</a>
+        </nav>
+        <div class="header-tools">
+          <label class="workspace-control" for="workspace-select">
+            <span class="sr-only">Workspace</span>
+            <select id="workspace-select" aria-label="Workspace" disabled>
+              <option>Loading workspace</option>
+            </select>
+          </label>
+          <span class="service-pill is-checking" id="service-status" role="status" aria-label="Checking service">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span>Checking</span>
+          </span>
+          <button class="button small" id="session-logout" type="button" hidden>Sign out</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="shell main-content" id="main-content" tabindex="-1">
+      <div class="loading-state" role="status" aria-live="polite">
+        <span class="eyebrow">Workspace</span>
+        <h1>Loading prices</h1>
+        <div class="loading-lines" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+    </main>
+
+    <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <noscript>
+      <div class="noscript">Price Monitor needs JavaScript for its operational workspace.</div>
+    </noscript>
+  </body>
+</html>

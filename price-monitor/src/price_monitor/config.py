@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,10 +23,20 @@ class Settings(BaseSettings):
     artifact_root: Path = Path("./var/artifacts")
     adapter_runtime_root: Path = Path("./var/adapters")
     api_prefix: str = "/api/v1"
-    api_token: SecretStr | None = Field(default=None, min_length=32)
-    cron_secret: SecretStr | None = Field(default=None, min_length=32)
+    api_token: SecretStr | None = Field(default=None, min_length=32, max_length=4_096)
+    cron_secret: SecretStr | None = Field(
+        default=None,
+        min_length=32,
+        max_length=4_096,
+        validation_alias=AliasChoices(
+            "CRON_SECRET",
+            "PRICE_MONITOR_CRON_SECRET",
+            "cron_secret",
+        ),
+    )
     cron_max_scrapes: int = Field(default=5, ge=1, le=25)
     ephemeral_demo: bool = False
+    seed_development_data: bool = False
 
     user_agent: str = "PriceMonitorBeta/0.1 (+mailto:ops@example.invalid)"
     request_timeout_seconds: float = Field(default=15.0, ge=1, le=120)
@@ -51,6 +61,16 @@ class Settings(BaseSettings):
 
         return self.migration_database_url or self.database_url
 
+    @field_validator("api_token", "cron_secret")
+    @classmethod
+    def http_secret_is_ascii(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None:
+            try:
+                value.get_secret_value().encode("ascii")
+            except UnicodeEncodeError as exc:
+                raise ValueError("HTTP authentication secrets must contain ASCII only") from exc
+        return value
+
     @model_validator(mode="after")
     def production_requires_postgres(self) -> Settings:
         if self.environment == "production" and not self.database_url.startswith(
@@ -65,7 +85,9 @@ class Settings(BaseSettings):
             if not self.database_url.startswith("sqlite") or "/tmp/" not in self.database_url:
                 raise ValueError("ephemeral demo storage must use a SQLite database under /tmp")
         if self.environment == "production" and self.cron_secret is None:
-            raise ValueError("production requires PRICE_MONITOR_CRON_SECRET")
+            raise ValueError("production requires CRON_SECRET")
+        if self.seed_development_data and self.environment not in {"development", "test"}:
+            raise ValueError("development seed data is forbidden in hosted environments")
         if self.repair_provider == "openai" and (
             self.openai_repair_model is None or self.openai_api_key is None
         ):

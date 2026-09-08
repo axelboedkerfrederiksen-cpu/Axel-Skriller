@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.orm import Session
 
 from price_monitor.db import (
+    AlertRule,
     Base,
     Competitor,
     CompetitorProduct,
@@ -87,8 +88,9 @@ def _catalog(session: Session) -> tuple[Customer, Competitor, Product, Competito
     return customer, competitor, product, target
 
 
-def test_metadata_contains_all_eight_domain_tables(db_engine: Engine) -> None:
+def test_metadata_contains_all_nine_domain_tables(db_engine: Engine) -> None:
     assert set(inspect(db_engine).get_table_names()) == {
+        "alert_rules",
         "competitor_products",
         "competitors",
         "customers",
@@ -321,6 +323,19 @@ def test_database_constraints_reject_invalid_data(sessions: SessionFactory) -> N
         with pytest.raises(IntegrityError):
             session.commit()
 
+    with sessions() as session:
+        customer, _, product, _ = _catalog(session)
+        session.add(
+            AlertRule(
+                customer_id=customer.id,
+                product_id=product.id,
+                direction="decrease",
+                threshold_percent=Decimal("0"),
+            )
+        )
+        with pytest.raises(IntegrityError):
+            session.commit()
+
 
 def test_naive_timestamps_are_rejected(sessions: SessionFactory) -> None:
     with sessions() as session:
@@ -352,6 +367,12 @@ def test_foreign_keys_cascade_owned_records(sessions: SessionFactory) -> None:
         session.add_all(
             [
                 result,
+                AlertRule(
+                    customer_id=customer.id,
+                    product_id=target.product_id,
+                    direction="either",
+                    threshold_percent=Decimal("5"),
+                ),
                 ScraperHealth(competitor=competitor, last_scrape_result=result),
                 RepairAttempt(
                     competitor=competitor,
@@ -377,6 +398,7 @@ def test_foreign_keys_cascade_owned_records(sessions: SessionFactory) -> None:
             ScrapeResult,
             ScraperHealth,
             RepairAttempt,
+            AlertRule,
         ):
             assert session.scalar(select(func.count()).select_from(model)) == 0
 

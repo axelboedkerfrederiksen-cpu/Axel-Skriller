@@ -35,6 +35,30 @@ def test_production_requires_postgres_and_api_token() -> None:
         )
 
 
+def test_vercel_cron_secret_name_is_supported(monkeypatch: pytest.MonkeyPatch) -> None:
+    cron_secret = "a-secure-vercel-cron-secret-that-is-long-enough"
+    monkeypatch.setenv("CRON_SECRET", cron_secret)
+
+    settings = Settings()
+
+    assert settings.cron_secret is not None
+    assert settings.cron_secret.get_secret_value() == cron_secret
+
+
+def test_vercel_cron_secret_takes_precedence(monkeypatch: pytest.MonkeyPatch) -> None:
+    vercel_secret = "the-vercel-cron-secret-that-is-long-enough"
+    monkeypatch.setenv("CRON_SECRET", vercel_secret)
+    monkeypatch.setenv(
+        "PRICE_MONITOR_CRON_SECRET",
+        "a-legacy-cron-secret-that-is-also-long-enough",
+    )
+
+    settings = Settings()
+
+    assert settings.cron_secret is not None
+    assert settings.cron_secret.get_secret_value() == vercel_secret
+
+
 def test_ephemeral_demo_is_explicit_and_limited_to_tmp_sqlite() -> None:
     with pytest.raises(ValidationError, match="under /tmp"):
         Settings(ephemeral_demo=True, database_url="sqlite:///./var/demo.db")

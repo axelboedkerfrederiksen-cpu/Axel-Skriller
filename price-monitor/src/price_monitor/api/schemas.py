@@ -14,6 +14,13 @@ class OrmSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AdapterRead(BaseModel):
+    key: str
+    display_name: str
+    allowed_hosts: tuple[str, ...]
+    fetch_mode: FetchMode
+
+
 class CustomerCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     slug: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=100)
@@ -255,6 +262,20 @@ class ScrapeResultRead(OrmSchema):
     html_sha256: str | None
 
 
+class MonitoringStatusRead(BaseModel):
+    """Small, non-diagnostic monitoring view intended for the operator UI."""
+
+    target_id: UUID
+    latest_job_status: str | None
+    latest_job_queued_at: datetime | None
+    latest_job_started_at: datetime | None
+    latest_job_finished_at: datetime | None
+    last_attempt_at: datetime | None
+    last_success_at: datetime | None
+    current_observed_at: datetime | None
+    consecutive_failures: int
+
+
 class PriceHistoryRead(OrmSchema):
     id: int
     competitor_product_id: UUID
@@ -292,6 +313,20 @@ class ScraperHealthRead(OrmSchema):
     last_failure_kind: str | None
     last_failure_message: str | None
     last_scrape_result_id: UUID | None
+    updated_at: datetime
+
+
+class CompetitorHealthSummaryRead(BaseModel):
+    """Safe scraper health fields for routine operator-facing screens."""
+
+    competitor_id: UUID
+    status: str
+    consecutive_repairable_failures: int
+    recent_failure_count: int
+    last_attempt_at: datetime | None
+    last_success_at: datetime | None
+    last_failure_at: datetime | None
+    last_failure_kind: str | None
     updated_at: datetime
 
 

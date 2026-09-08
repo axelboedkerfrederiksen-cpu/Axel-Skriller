@@ -30,6 +30,7 @@ from price_monitor.domain.enums import FetchMode
 from price_monitor.domain.types import ScrapeTarget
 from price_monitor.fetchers import HttpFetcher, RobotsTxtPolicy
 from price_monitor.services.adapter_registry import AdapterRegistry
+from price_monitor.services.development_seed import seed_development_workspace
 from price_monitor.services.queue import ScrapeQueue
 from price_monitor.services.repair_coordinator import RepairCoordinator
 from price_monitor.services.validation import ProductValidator
@@ -230,6 +231,24 @@ def demo(
     with tempfile.TemporaryDirectory(prefix="price-monitor-demo-") as directory:
         report = asyncio.run(run_demo(Path(directory)))
         typer.echo(json.dumps(asdict(report), indent=2))
+
+
+@app.command("seed-development")
+def seed_development() -> None:
+    """Seed a realistic local workspace from offline fixtures."""
+
+    settings, engine, factory, registry = _runtime()
+    try:
+        created = asyncio.run(
+            seed_development_workspace(
+                settings=settings,
+                session_factory=factory,
+                registry=registry,
+            )
+        )
+        typer.echo(json.dumps({"created": created}))
+    finally:
+        engine.dispose()
 
 
 @app.command("live-smoke")

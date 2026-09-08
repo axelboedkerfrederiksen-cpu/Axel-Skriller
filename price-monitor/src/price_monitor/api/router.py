@@ -9,9 +9,12 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
+from price_monitor.api.alerts import router as alert_router
 from price_monitor.api.dependencies import AdapterRegistryDep, SessionDep
 from price_monitor.api.schemas import (
+    AdapterRead,
     CompetitorCreate,
+    CompetitorHealthSummaryRead,
     CompetitorProductCreate,
     CompetitorProductRead,
     CompetitorProductUpdate,
@@ -20,6 +23,7 @@ from price_monitor.api.schemas import (
     CustomerCreate,
     CustomerRead,
     CustomerUpdate,
+    MonitoringStatusRead,
     OfferRead,
     PriceHistoryRead,
     ProductCreate,
@@ -43,12 +47,14 @@ from price_monitor.services.errors import ConflictError, InvalidRequestError, No
 from price_monitor.services.queue import ScrapeQueue
 
 router = APIRouter()
+router.include_router(alert_router)
 
 Limit500 = Annotated[int, Query(ge=1, le=500)]
 Limit1000 = Annotated[int, Query(ge=1, le=1_000)]
 FromTime = Annotated[datetime | None, Query(alias="from")]
 ToTime = Annotated[datetime | None, Query(alias="to")]
 RepairStatusQuery = Annotated[RepairStatus | None, Query(alias="status")]
+_ADAPTER_DISPLAY_NAMES = {"books_to_scrape": "Books to Scrape"}
 
 
 def _commit(session: Session) -> None:
@@ -57,6 +63,19 @@ def _commit(session: Session) -> None:
     except IntegrityError as exc:
         session.rollback()
         raise ConflictError("resource conflicts with a concurrent operation") from exc
+
+
+@router.get("/adapters", response_model=list[AdapterRead])
+def list_adapters(registry: AdapterRegistryDep) -> list[AdapterRead]:
+    return [
+        AdapterRead(
+            key=spec.key,
+            display_name=_ADAPTER_DISPLAY_NAMES.get(spec.key, spec.key.replace("_", " ").title()),
+            allowed_hosts=spec.allowed_hosts,
+            fetch_mode=spec.fetch_mode,
+        )
+        for spec in (registry.active_spec(key) for key in sorted(registry.keys))
+    ]
 
 
 @router.post(
@@ -159,6 +178,31 @@ def get_competitor_health(competitor_id: UUID, session: SessionDep) -> ScraperHe
     return ScraperHealthRead.model_validate(health)
 
 
+@router.get(
+    "/competitors/{competitor_id}/health-summary",
+    response_model=CompetitorHealthSummaryRead,
+)
+def get_competitor_health_summary(
+    competitor_id: UUID,
+    session: SessionDep,
+) -> CompetitorHealthSummaryRead:
+    CatalogService.get_competitor(session, competitor_id)
+    health = session.get(ScraperHealth, competitor_id)
+    if health is None:
+        raise NotFoundError("scraper health has not been initialized")
+    return CompetitorHealthSummaryRead(
+        competitor_id=health.competitor_id,
+        status=health.status.value,
+        consecutive_repairable_failures=health.consecutive_repairable_failures,
+        recent_failure_count=health.recent_failure_count,
+        last_attempt_at=health.last_attempt_at,
+        last_success_at=health.last_success_at,
+        last_failure_at=health.last_failure_at,
+        last_failure_kind=(health.last_failure_kind.value if health.last_failure_kind else None),
+        updated_at=health.updated_at,
+    )
+
+
 @router.post(
     "/customers/{customer_id}/products",
     response_model=ProductRead,
@@ -233,6 +277,31 @@ def update_competitor_product(
     target = CatalogService.update_competitor_product(session, target_id, request)
     _commit(session)
     return CompetitorProductRead.model_validate(target)
+
+
+@router.get(
+    "/competitor-products/{target_id}/monitoring-status",
+    response_model=MonitoringStatusRead,
+)
+def get_monitoring_status(target_id: UUID, session: SessionDep) -> MonitoringStatusRead:
+    target = CatalogService.get_competitor_product(session, target_id)
+    latest_job = session.scalar(
+        select(ScrapeResult)
+        .where(ScrapeResult.competitor_product_id == target_id)
+        .order_by(ScrapeResult.queued_at.desc(), ScrapeResult.id.desc())
+        .limit(1)
+    )
+    return MonitoringStatusRead(
+        target_id=target.id,
+        latest_job_status=latest_job.status.value if latest_job else None,
+        latest_job_queued_at=latest_job.queued_at if latest_job else None,
+        latest_job_started_at=latest_job.started_at if latest_job else None,
+        latest_job_finished_at=latest_job.finished_at if latest_job else None,
+        last_attempt_at=target.last_attempt_at,
+        last_success_at=target.last_success_at,
+        current_observed_at=target.current_observed_at,
+        consecutive_failures=target.consecutive_failures,
+    )
 
 
 @router.post(

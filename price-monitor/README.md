@@ -2,7 +2,8 @@
 
 A production-oriented beta for monitoring competitor product prices. It uses deterministic
 scrapers for routine work, retains an auditable history, detects unhealthy adapters, and
-puts every proposed repair through a tightly scoped test-and-review gate.
+puts every proposed repair through a tightly scoped test-and-review gate. A compact operator
+workspace turns that trusted data into the daily product, offer, health, and alert workflow.
 
 The existing `bill-tracker/` project is unrelated and remains untouched. This service is a
 standalone Python application in `price-monitor/`.
@@ -20,15 +21,19 @@ standalone Python application in `price-monitor/`.
 - Deterministic validation of money, currency, product identity, price bounds, temporal
   changes, and field-level extraction evidence
 - Immutable scrape attempts, append-only accepted price history, and cached current offers
+- A responsive operational workspace for overview, products, offer comparison, competitors,
+  scraper health, and in-app price alerts
+- Safe, compact monitoring-status endpoints for the UI that omit diagnostic messages and
+  artifact locations
 - Health tracking, failure classification, diagnostic HTML snapshots, and deduplicated
   repair tasks
 - Guarded selector repair with immutable versions, old/new/holdout tests, explicit
   deployment, and atomic rollback pointers
 - A complete offline demonstration plus an opt-in public live smoke check
 
-Billing, end-user accounts, automatic discovery/repricing, and a large AI pricing system are
-intentionally outside this beta. Hosted API access uses one deployment-level bearer token; that
-is an operator boundary, not multi-user authentication.
+Billing, end-user accounts, outbound alert delivery, automatic discovery/repricing, and a large
+AI pricing system are intentionally outside this beta. Hosted access uses one deployment-level
+operator token; it is not multi-user authentication.
 
 ## Architecture
 
@@ -93,10 +98,40 @@ python3 -m venv .venv
 ```
 
 The no-configuration local default is SQLite for developer convenience. Open
-`http://127.0.0.1:8000/` for the service homepage or `http://127.0.0.1:8000/docs` for the API
-workspace. SQLite is not the production store.
+`http://127.0.0.1:8000/` for the operational workspace or `http://127.0.0.1:8000/docs` for the
+API documentation. SQLite is not the production store.
 
-When `PRICE_MONITOR_API_TOKEN` is configured, send it to every `/api/v1` route:
+The workspace is organized around these routes:
+
+```text
+/                         overview, price changes, and items needing attention
+/products                 monitored products
+/products/new             add a product and its first competitor URL
+/products/{product_id}    trusted offers, history, and manual checks for one product
+/competitors              configured sources and scraper health
+/alerts                    create and manage in-app price-change rules
+```
+
+An empty database starts with a short workspace setup form. For a realistic offline development
+workspace, apply migrations to an empty database and explicitly seed it:
+
+```sh
+.venv/bin/price-monitor seed-development
+```
+
+The command uses bundled fixtures and the real validation/result pipeline. It is idempotent for
+its completed seed, refuses to mix seed records into a non-empty database, and is allowed only in
+`development` or `test`. To run the same seed once during local app startup, set
+`PRICE_MONITOR_SEED_DEVELOPMENT_DATA=true`. That setting is rejected in `preview` and
+`production`, so development records cannot be enabled on a hosted deployment.
+
+When `PRICE_MONITOR_API_TOKEN` is configured, the workspace asks for the access key. The key is
+checked once and exchanged for a signed, 12-hour HttpOnly browser session; the page
+does not retain the key. The cookie uses `SameSite=Strict`; hosted sessions are also marked
+Secure, and UI mutations require a
+same-origin request marker. Signing out clears the session cookie.
+
+Direct API clients continue to send the deployment token to every `/api/v1` route:
 
 ```sh
 curl -H "Authorization: Bearer $PRICE_MONITOR_API_TOKEN" \
@@ -206,20 +241,22 @@ PRICE_MONITOR_ARTIFACT_ROOT=/tmp/price-monitor/artifacts
 PRICE_MONITOR_ADAPTER_RUNTIME_ROOT=/tmp/price-monitor/adapters
 PRICE_MONITOR_EPHEMERAL_DEMO=true
 PRICE_MONITOR_API_TOKEN=<at-least-32-random-characters>
-PRICE_MONITOR_CRON_SECRET=<a-different-at-least-32-random-characters>
+CRON_SECRET=<a-different-at-least-32-random-characters>
 ```
 
-This mode only demonstrates the HTTP catalog API. Vercel's `/tmp` filesystem is ephemeral and
-not shared between Function instances, so its catalog, history, artifacts, and repair revisions
-can vanish at any time. The app rejects this mode when `PRICE_MONITOR_ENVIRONMENT=production`.
+This mode demonstrates the operational UI and HTTP catalog API, but it is not durable. Vercel's
+`/tmp` filesystem is ephemeral and not shared between Function instances, so its catalog,
+history, alert rules, artifacts, and repair revisions can vanish at any time. The UI can enqueue
+a check, but temporary storage still makes results unreliable across Function instances. The app
+rejects this mode when `PRICE_MONITOR_ENVIRONMENT=production`. Development seed data is also
+rejected in preview mode.
 
-For a real deployment, configure the Supabase transaction-pooler URL and apply Alembic
-migrations as a separate release step. Each scheduled invocation queues due targets and processes
-at most `PRICE_MONITOR_CRON_MAX_SCRAPES` (default `5`), so no infinite worker runs inside a
-Function. The Hobby plan supports the configured daily schedule; more frequent checks require a
-Vercel plan that supports more frequent cron jobs. Durable HTML artifact and repair-revision
-storage remains a later production hardening step; relational monitoring data is already durable
-in Supabase.
+For a real deployment, configure the Supabase transaction-pooler URL and apply Alembic migrations
+as a separate release step. Each scheduled invocation queues due targets and processes at most
+`PRICE_MONITOR_CRON_MAX_SCRAPES` (default `5`), so no infinite worker runs inside a Function. The
+Hobby plan supports the configured daily schedule; more frequent checks require a Vercel plan that
+supports more frequent cron jobs. Relational monitoring and alert data is durable in Supabase;
+durable HTML artifact and repair-revision storage remains a later production hardening step.
 
 Direct preview release, without a PR or CI publisher, requires Vercel CLI 48.8.0 or newer:
 
@@ -249,6 +286,7 @@ price-monitor repair-once                validate/stage one repair, never auto-d
 price-monitor repair-worker              continuously validate/stage repairs
 price-monitor deploy-repair REPAIR_ID     explicitly deploy a validated revision
 price-monitor rollback COMPETITOR_ID      restore the previous adapter revision
+price-monitor seed-development            seed one empty development/test database
 price-monitor demo                        run the offline end-to-end proof
 price-monitor live-smoke                  opt in to one public test-site request
 ```
@@ -256,8 +294,8 @@ price-monitor live-smoke                  opt in to one public test-site request
 ## API surface
 
 The versioned API provides customer, competitor, product, and product-mapping CRUD; manual
-scrape queueing; result/history/offer reads; scraper health; and repair-task reads. Mutations
-use deactivation rather than destructive deletes.
+scrape queueing; result/history/offer reads; scraper health; in-app alert rules; and repair-task
+reads. Catalog mutations use deactivation rather than destructive deletes.
 
 Key routes include:
 
@@ -267,10 +305,16 @@ POST /api/v1/customers/{customer_id}/competitors
 POST /api/v1/customers/{customer_id}/products
 POST /api/v1/products/{product_id}/competitor-products
 POST /api/v1/competitor-products/{target_id}/scrapes
+GET  /api/v1/competitor-products/{target_id}/monitoring-status
 GET  /api/v1/competitor-products/{target_id}/scrape-results
 GET  /api/v1/products/{product_id}/price-history
 GET  /api/v1/products/{product_id}/offers
 GET  /api/v1/competitors/{competitor_id}/health
+GET  /api/v1/competitors/{competitor_id}/health-summary
+POST /api/v1/customers/{customer_id}/alert-rules
+GET  /api/v1/customers/{customer_id}/alert-rules
+PATCH /api/v1/alert-rules/{rule_id}
+DELETE /api/v1/alert-rules/{rule_id}
 GET  /api/v1/repair-attempts
 GET  /api/v1/customers/{customer_id}/dashboard
 GET  /api/v1/customers/{customer_id}/dashboard/products
@@ -278,6 +322,15 @@ GET  /api/v1/customers/{customer_id}/dashboard/products/{product_id}
 GET  /api/v1/customers/{customer_id}/dashboard/competitors
 GET  /api/v1/customers/{customer_id}/dashboard/health
 ```
+
+The workspace uses `monitoring-status` and `health-summary` for routine state. These responses
+contain only job state, timestamps, failure categories, and counters; they do not expose internal
+failure messages, stack traces, diagnostic artifacts, or repair paths.
+
+Alert rules support increase, decrease, or either-direction thresholds. Their displayed state is
+derived from accepted price history recorded after the rule was created, so failed checks do not
+replace the last trusted price or trigger a rule. Alerts are visible only inside this workspace;
+email, webhook, SMS, and other notification delivery are not implemented.
 
 Repair deployment is intentionally CLI-only until an authenticated admin boundary exists.
 The API never accepts Python patches.
@@ -318,3 +371,5 @@ prices. A repair corpus needs known-good, newly failing, and holdout cases befor
 4. Add operational metrics and alerts for queue age, stale leases, rejection rate, repair rate,
    and per-site request budgets.
 5. Add customer onboarding and a safe way to keep each webshop's own prices synchronized.
+6. Add notification delivery and acknowledgement workflows after operator identities and audit
+   events provide the required security boundary.
