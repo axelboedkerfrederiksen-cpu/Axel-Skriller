@@ -10,7 +10,6 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from sqlalchemy import select
 
 from price_monitor.api.cron_router import router as cron_router
-from price_monitor.api.dashboard_router import router as dashboard_router
 from price_monitor.api.dependencies import SessionDep, require_api_token
 from price_monitor.api.docs import (
     SWAGGER_OAUTH2_REDIRECT_URL,
@@ -80,7 +79,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     web_root = Path(__file__).resolve().parent / "web"
     api_router = APIRouter()
     api_router.include_router(router)
-    api_router.include_router(dashboard_router)
     app.include_router(
         api_router,
         prefix=runtime_settings.api_prefix,

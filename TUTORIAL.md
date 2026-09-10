@@ -4,18 +4,11 @@ Denne tutorial viser den nuværende brugerrejse fra en frisk checkout til et fun
 lokalt prisovervågningsflow. Den er skrevet til PowerShell på Windows. På macOS/Linux kan
 `py -3.12` erstattes af `python3`, og `.venv\Scripts\...` af `.venv/bin/...`.
 
-## 1. Forstå de to Pricegrid-brugerflader
+## 1. Forstå Pricegrid-brugerfladen
 
-Der er to forskellige webflader:
-
-- **Price Monitor** på `http://127.0.0.1:8000/` er operator-workspace’et. Her opretter du
-  kunder, konkurrenter og produkter, konfigurerer alerts og ser scraper health.
-- **Pricegrid dashboard** er kundevisningen. Den viser pris-KPI’er, produkter,
-  konkurrent-sammenligning og monitoring health. Den er read-only i forhold til backendens
-  katalog.
-
-Price Monitor-backenden er den autoritative kilde. Dashboardet kan først vise live-data,
-når det er konfigureret med backendens URL og et customer UUID.
+**Price Monitor** på `http://127.0.0.1:8000/` er Pricegrid-betaens eneste webflade.
+Her opretter du kunder, konkurrenter og produkter, konfigurerer alerts og ser scraper health.
+Price Monitor-backenden er den autoritative kilde for både workspace og API.
 
 ## 2. Installer Price Monitor lokalt
 
@@ -206,62 +199,7 @@ Hvis du vil se ét respektfuldt live-kald mod Books to Scrape, skal du selv opt-
 .\.venv\Scripts\price-monitor.exe live-smoke
 ```
 
-## 7. Start Pricegrid dashboardet i demo mode
-
-Åbn et nyt terminalvindue i repository-roden:
-
-```powershell
-Set-Location pricegrid-dashboard
-npm install
-npm run dev
-```
-
-Åbn den lokale URL, som Vite/Vinext viser. Uden ekstra konfiguration bruger dashboardet
-demo-data fra `lib/mock/data.ts`.
-
-Dashboardets navigation indeholder:
-
-- **Overview** — samlede KPI’er, største prisgab og seneste events;
-- **Products** — filtrerbare produkter med prisposition;
-- **Products → et produkt** — tilbud, lagerstatus, events og pris-historik;
-- **Competitors** — dækning, billigste produkter og success rate;
-- **Monitoring** — freshness, stale checks og failed checks.
-
-Mock-data er bevidst let at udforske og indeholder både healthy, stale og failed eksempler.
-Banneret i UI’et viser, om du ser `Demo data` eller live-data.
-
-## 8. Forbind dashboardet til den lokale backend
-
-Først skal backend’en køre og have seed-data. Find customer UUID med:
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:8000/api/v1/customers | ConvertTo-Json
-```
-
-Kopiér `id` fra kunden **Northline Goods**. Opret derefter dashboardets lokale miljøfil:
-
-```powershell
-Set-Location ..\pricegrid-dashboard
-Copy-Item .env.example .env.local
-```
-
-Redigér `.env.local`:
-
-```env
-PRICEGRID_USE_MOCK_API=false
-PRICE_MONITOR_API_BASE_URL=http://127.0.0.1:8000
-PRICE_MONITOR_CUSTOMER_ID=<customer-uuid-fra-api>
-# Kun nødvendig hvis backend’en bruger token:
-# PRICE_MONITOR_API_TOKEN=<samme-token-som-backenden>
-```
-
-Genstart dashboardets udviklingsserver. Dashboardet kalder nu backendens customer-scoped
-read endpoints på serveren. Token og database credentials sendes ikke til browseren.
-
-Hvis du vil gå tilbage til demo-data, sæt `PRICEGRID_USE_MOCK_API=true` eller fjern
-`.env.local` og genstart serveren.
-
-## 9. Brug den separate bill tracker
+## 7. Brug den separate bill tracker
 
 Bill tracker er ikke en del af Pricegrid-flowet, men kan køres sådan:
 
@@ -294,14 +232,6 @@ Set-Location ..\price-monitor
 .\.venv\Scripts\python.exe -m mypy src/price_monitor
 ```
 
-Dashboard:
-
-```powershell
-Set-Location ..\pricegrid-dashboard
-npm run lint
-npx tsc --noEmit
-npm run build
-```
 
 Bill tracker:
 

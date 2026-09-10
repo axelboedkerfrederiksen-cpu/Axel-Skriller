@@ -11,7 +11,6 @@ standalone Python application in `price-monitor/`.
 ## What is included
 
 - FastAPI catalog and monitoring API
-- Customer-scoped read API shaped for the Pricegrid dashboard
 - PostgreSQL schema, SQLAlchemy 2 models, and Alembic migration
 - Durable PostgreSQL-backed scheduling queue with worker leases
 - Per-site, versioned adapter modules and declarative selector specs
@@ -46,9 +45,6 @@ competitor sites -> scrape worker -> validation -> PostgreSQL / Supabase
                                               |                 |
                                               v                 v
                                    health + repair flow    FastAPI read API
-                                                                |
-                                                                v
-                                                     Pricegrid dashboard
 
 scheduler ---------------------> durable scrape queue
 ```
@@ -203,8 +199,8 @@ Docker socket into the API service.
 ## Supabase PostgreSQL
 
 Supabase can replace the Compose PostgreSQL container without changing the application model.
-It is the shared system of record for the API, scheduler, and workers; the dashboard still talks
-to FastAPI and never receives a database password or Supabase service credential.
+It is the shared system of record for the API, scheduler, and workers; the operator workspace
+never receives a database password or Supabase service credential.
 
 1. Create a Supabase project and open its **Connect** panel.
 2. For Vercel, copy the Supavisor **Transaction pooler** URI on port 6543. For an always-on
@@ -316,11 +312,6 @@ GET  /api/v1/customers/{customer_id}/alert-rules
 PATCH /api/v1/alert-rules/{rule_id}
 DELETE /api/v1/alert-rules/{rule_id}
 GET  /api/v1/repair-attempts
-GET  /api/v1/customers/{customer_id}/dashboard
-GET  /api/v1/customers/{customer_id}/dashboard/products
-GET  /api/v1/customers/{customer_id}/dashboard/products/{product_id}
-GET  /api/v1/customers/{customer_id}/dashboard/competitors
-GET  /api/v1/customers/{customer_id}/dashboard/health
 ```
 
 The workspace uses `monitoring-status` and `health-summary` for routine state. These responses
