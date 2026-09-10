@@ -114,6 +114,12 @@ class CatalogService:
         return CatalogService._apply_update(session, product, values)
 
     @staticmethod
+    def delete_product(session: Session, product_id: UUID) -> None:
+        product = _get_or_raise(session, Product, product_id)
+        session.delete(product)
+        session.flush()
+
+    @staticmethod
     def create_competitor_product(
         session: Session,
         product_id: UUID,

@@ -368,6 +368,16 @@ def test_catalog_queue_and_read_api(session_factory: sessionmaker[Session], tmp_
         assert http.get(f"/api/v1/competitors/{competitor['id']}/health").status_code == 200
         assert http.get(f"/api/v1/products/{product['id']}/offers").json()[0]["price"] is None
 
+        deleted = http.delete(f"/api/v1/products/{product['id']}")
+        assert deleted.status_code == 204
+        assert http.get(f"/api/v1/products/{product['id']}").status_code == 404
+        assert (
+            http.get(f"/api/v1/competitor-products/{target['id']}/monitoring-status").status_code
+            == 404
+        )
+        assert http.get(f"/api/v1/scrape-results/{queued['scrape_result_id']}").status_code == 404
+        assert http.get(f"/api/v1/customers/{customer['id']}/products").json() == []
+
 
 def test_api_enforces_tenant_and_adapter_host_boundaries(
     session_factory: sessionmaker[Session], tmp_path: Path

@@ -242,6 +242,16 @@ def update_product(
     return ProductRead.model_validate(product)
 
 
+@router.delete(
+    "/products/{product_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_product(product_id: UUID, session: SessionDep) -> Response:
+    CatalogService.delete_product(session, product_id)
+    _commit(session)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post(
     "/products/{product_id}/competitor-products",
     response_model=CompetitorProductRead,

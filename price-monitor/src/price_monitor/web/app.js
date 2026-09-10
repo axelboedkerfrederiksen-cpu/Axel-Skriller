@@ -8,6 +8,9 @@
   const serviceStatus = document.querySelector("#service-status");
   const sessionLogout = document.querySelector("#session-logout");
   const toastRegion = document.querySelector("#toast-region");
+  const utilityContext = document.querySelector("#utility-context");
+  const workspaceDialog = document.querySelector("#workspace-dialog");
+  const workspaceDialogContent = document.querySelector("#workspace-dialog-content");
 
   const state = {
     controller: null,
@@ -87,33 +90,6 @@
     return id ? appHref(`/products/${id}`) : appHref("/products");
   }
 
-  function currentTimeZone() {
-    const candidate = state.customer?.timezone;
-    if (!candidate) return undefined;
-    try {
-      new Intl.DateTimeFormat(undefined, { timeZone: candidate }).format(new Date());
-      return candidate;
-    } catch (_error) {
-      return undefined;
-    }
-  }
-
-  function formatExactTime(value) {
-    if (!value) return "Never";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "Unavailable";
-    return new Intl.DateTimeFormat(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      timeZoneName: "short",
-      timeZone: currentTimeZone(),
-    }).format(date);
-  }
-
   function formatRelativeTime(value) {
     if (!value) return "Never checked";
     const timestamp = new Date(value).getTime();
@@ -140,14 +116,11 @@
 
   function timeMarkup(value, tone = "") {
     if (!value) {
-      return '<span class="timestamp-stack"><span class="pill waiting">Never checked</span></span>';
+      return '<span class="pill waiting">Never</span>';
     }
     const safe = escapeHtml(value);
     const toneClass = tone ? ` ${escapeHtml(tone)}` : "";
-    return `<span class="timestamp-stack">
-      <span class="pill${toneClass}">${escapeHtml(formatRelativeTime(value))}</span>
-      <time datetime="${safe}">${escapeHtml(formatExactTime(value))}</time>
-    </span>`;
+    return `<time class="pill${toneClass}" datetime="${safe}">${escapeHtml(formatRelativeTime(value))}</time>`;
   }
 
   function formatPrice(value, currency) {
@@ -328,18 +301,15 @@
 
   function loadingMarkup(label) {
     return `<div class="loading-state" role="status" aria-live="polite">
-      <span class="eyebrow">${escapeHtml(state.customer?.name || "Workspace")}</span>
       <h1>${escapeHtml(label)}</h1>
       <div class="loading-lines" aria-hidden="true"><span></span><span></span><span></span></div>
     </div>`;
   }
 
-  function pageHeading(eyebrow, title, lede, actions = "") {
+  function pageHeading(title, actions = "") {
     return `<section class="page-heading">
       <div class="page-heading-copy">
-        <span class="eyebrow">${escapeHtml(eyebrow)}</span>
         <h1>${escapeHtml(title)}</h1>
-        ${lede ? `<p class="lede">${escapeHtml(lede)}</p>` : ""}
       </div>
       ${actions ? `<div class="heading-actions">${actions}</div>` : ""}
     </section>`;
@@ -356,8 +326,8 @@
   function renderFatal(error) {
     const unauthorized = error?.status === 401 || error?.status === 403;
     document.title = `${unauthorized ? "Access required" : "Unavailable"} · Price Monitor`;
+    utilityContext.textContent = unauthorized ? "Access" : "Unavailable";
     main.innerHTML = `<div class="error-state" role="alert">
-      <span class="eyebrow">${unauthorized ? "Protected workspace" : "Connection error"}</span>
       <h1>${unauthorized ? "Operator access required" : "Price data unavailable"}</h1>
       <p>${
         unauthorized
@@ -373,6 +343,7 @@
   }
 
   function updateHeader(route) {
+    utilityContext.textContent = titleForRoute(route);
     document.querySelectorAll("[data-route]").forEach((link) => {
       const active =
         link.dataset.route === route.name ||
@@ -384,6 +355,10 @@
     });
     const brand = document.querySelector(".brand");
     brand.href = appHref("/");
+    document.querySelectorAll("[data-add-product]").forEach((link) => {
+      link.href = appHref("/products/new");
+      link.hidden = !selectedCustomerId();
+    });
 
     workspaceSelect.replaceChildren();
     if (!state.customers.length) {
@@ -396,7 +371,65 @@
       workspaceSelect.append(new Option(`${customer.name}${suffix}`, customer.id));
     });
     workspaceSelect.value = state.customer?.id || "";
+    workspaceSelect.append(new Option("Rename workspace…", "__rename__"));
+    workspaceSelect.append(new Option("New workspace…", "__create__"));
     workspaceSelect.disabled = false;
+  }
+
+  function closeWorkspaceDialog() {
+    if (workspaceDialog.open) workspaceDialog.close();
+    workspaceSelect.value = selectedCustomerId();
+  }
+
+  function openWorkspaceDialog(mode) {
+    const rename = mode === "rename";
+    if (rename && !state.customer) return;
+    const title = rename ? "Rename workspace" : "New workspace";
+    workspaceDialogContent.innerHTML = `<div class="workspace-dialog-card">
+      <div class="panel-heading">
+        <div class="panel-heading-copy"><h2 id="workspace-dialog-title">${title}</h2></div>
+        <button class="button small" type="button" data-action="close-workspace-dialog">Close</button>
+      </div>
+      ${rename
+        ? `<form id="workspace-rename-form" novalidate>
+            <fieldset>
+              <div class="field full">
+                <label for="workspace-rename-name">Name <span class="required">Required</span></label>
+                <input id="workspace-rename-name" name="name" maxlength="200" value="${escapeHtml(state.customer.name)}" required>
+              </div>
+            </fieldset>
+            <div class="form-actions">
+              <button class="button" type="button" data-action="close-workspace-dialog">Cancel</button>
+              <button class="button primary" type="submit">Save</button>
+            </div>
+          </form>`
+        : `<form id="workspace-create-form" novalidate>
+            <fieldset>
+              <div class="field-grid">
+                <div class="field full">
+                  <label for="workspace-create-name">Name <span class="required">Required</span></label>
+                  <input id="workspace-create-name" name="name" maxlength="200" required>
+                </div>
+                <div class="field full">
+                  <label for="workspace-create-url">Store URL <span class="required">Required</span></label>
+                  <input id="workspace-create-url" name="webshop_url" type="url" inputmode="url" autocomplete="url" placeholder="https://your-store.example" required>
+                </div>
+                <div class="field">
+                  <label for="workspace-create-currency">Currency</label>
+                  <input id="workspace-create-currency" name="default_currency" value="${escapeHtml(state.customer?.default_currency || "USD")}" minlength="3" maxlength="3" pattern="[A-Za-z]{3}" required>
+                </div>
+              </div>
+            </fieldset>
+            <div class="form-actions">
+              <button class="button" type="button" data-action="close-workspace-dialog">Cancel</button>
+              <button class="button primary" type="submit">Create</button>
+            </div>
+          </form>`}
+    </div>`;
+    workspaceDialog.showModal();
+    window.requestAnimationFrame(() => {
+      workspaceDialog.querySelector("input")?.focus();
+    });
   }
 
   async function checkService() {
@@ -608,7 +641,6 @@
         data-competitors="${escapeHtml(competitorIds)}">
         <td>
           <a class="cell-title" href="${escapeHtml(productHref(bundle.product.id))}" data-nav>${escapeHtml(name)}</a>
-          <span class="cell-subtitle">${escapeHtml(bundle.product.sku || "No SKU")}</span>
         </td>
         <td><span class="price">${escapeHtml(formatPrice(bundle.product.current_own_price, bundle.product.currency))}</span></td>
         <td>${
@@ -720,9 +752,8 @@
         </div>`;
       }
       return `<div class="empty-state compact">
-        <span class="pill success">All current</span>
         <h2>Nothing needs attention</h2>
-        <p>Active targets are reporting within their expected schedule.</p>
+        <span class="pill success">All current</span>
       </div>`;
     }
     const visible = items.slice(0, 6);
@@ -734,7 +765,6 @@
         </div>
         <div class="attention-meta">
           ${statusPill(item.status)}
-          ${item.eventTime ? `<time class="exact-time" datetime="${escapeHtml(item.eventTime)}">${escapeHtml(formatExactTime(item.eventTime))}</time>` : ""}
         </div>
       </li>`).join("")}
     </ul>`;
@@ -762,12 +792,7 @@
       0,
     );
     const actions = `<a class="button primary" href="${escapeHtml(appHref("/products/new"))}" data-nav>Add product</a>`;
-    main.innerHTML = `${pageHeading(
-      state.customer.name,
-      "Overview",
-      "Trusted prices, changes, and monitoring health.",
-      actions,
-    )}
+    main.innerHTML = `${pageHeading("Overview", actions)}
       ${partialNotice()}
       <section class="summary-strip" aria-label="Workspace summary">
         <span><strong>${data.products.length}</strong> product${data.products.length === 1 ? "" : "s"}</span>
@@ -777,21 +802,17 @@
           : activeTargetCount
             ? '<span class="pill success">Monitoring current</span>'
             : '<span class="pill waiting">Nothing monitored</span>'}</span>
-        <span class="summary-spacer"></span>
-        <span class="exact-time">Loaded ${escapeHtml(formatExactTime(new Date().toISOString()))}</span>
       </section>
       <div class="workspace-grid">
         <section class="panel" aria-labelledby="prices-title">
           <div class="panel-heading">
-            <div class="panel-heading-copy"><span class="eyebrow">Current</span><h2 id="prices-title">Monitored products</h2></div>
-            <a class="text-link" href="${escapeHtml(appHref("/products"))}" data-nav>View all</a>
+            <div class="panel-heading-copy"><h2 id="prices-title">Monitored products</h2></div>
           </div>
           ${productTable(data, "overview-products")}
         </section>
         <section class="panel" aria-labelledby="attention-title">
           <div class="panel-heading">
-            <div class="panel-heading-copy"><span class="eyebrow">Checks</span><h2 id="attention-title">Needs attention</h2></div>
-            <span class="pill ${attention.length ? "warning" : "success"}">${attention.length}</span>
+            <div class="panel-heading-copy"><h2 id="attention-title">Needs attention</h2></div>
           </div>
           ${renderAttention(data)}
         </section>
@@ -804,12 +825,7 @@
     state.data = data;
     const requestedCompetitor = safeId(new URLSearchParams(window.location.search).get("competitor"));
     const actions = `<a class="button primary" href="${escapeHtml(appHref("/products/new"))}" data-nav>Add product</a>`;
-    main.innerHTML = `${pageHeading(
-      state.customer.name,
-      "Products",
-      "Current offers and the latest accepted changes.",
-      actions,
-    )}
+    main.innerHTML = `${pageHeading("Products", actions)}
       ${partialNotice()}
       <div class="filters" aria-label="Product filters">
         <div class="filter-row" role="group" aria-label="Monitoring status">
@@ -822,7 +838,7 @@
       </div>
       <section class="panel" aria-labelledby="product-list-title">
         <div class="panel-heading">
-          <div class="panel-heading-copy"><span class="eyebrow">Catalog</span><h2 id="product-list-title">All products</h2></div>
+          <div class="panel-heading-copy"><h2 id="product-list-title">All products</h2></div>
           <span class="pill" id="product-result-count">${data.products.length}</span>
         </div>
         ${productTable(data, "products-table")}
@@ -904,7 +920,7 @@
       groups.set(point.competitor_product_id, valuesForTarget);
     });
     const targetsById = new Map(bundle.targets.map((target) => [target.id, target]));
-    const colors = ["#126b5b", "#17201a", "#7d6854", "#687169", "#8a514b"];
+    const colors = ["#035efc", "#02a98d", "#7457d9", "#d07a27", "#6b7785"];
     const grid = [0, 1, 2, 3].map((index) => {
       const ratio = index / 3;
       const gridY = margin.top + ratio * plotHeight;
@@ -916,7 +932,7 @@
       const color = colors[index % colors.length];
       const path = series.map((point, pointIndex) => `${pointIndex ? "L" : "M"}${x(point.timestamp).toFixed(1)},${y(point.numeric).toFixed(1)}`).join(" ");
       const markers = series.slice(-24).map((point) => `<rect class="chart-point" x="${(x(point.timestamp) - 3.5).toFixed(1)}" y="${(y(point.numeric) - 3.5).toFixed(1)}" width="7" height="7" rx="1" fill="${color}">
-        <title>${escapeHtml(`${formatPrice(point.price, point.currency)} · ${formatExactTime(point.observed_at)}`)}</title>
+        <title>${escapeHtml(`${formatPrice(point.price, point.currency)} · ${formatRelativeTime(point.observed_at)}`)}</title>
       </rect>`).join("");
       return `<path class="chart-line" d="${path}" stroke="${color}"></path>${markers}`;
     }).join("");
@@ -930,8 +946,8 @@
       <svg class="price-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Accepted ${escapeHtml(preferred)} prices over time">
         ${grid}
         ${lines}
-        <text class="chart-axis" x="${margin.left}" y="${height - 8}">${escapeHtml(formatExactTime(points[0].observed_at))}</text>
-        <text class="chart-axis" x="${width - margin.right}" y="${height - 8}" text-anchor="end">${escapeHtml(formatExactTime(points.at(-1).observed_at))}</text>
+        <text class="chart-axis" x="${margin.left}" y="${height - 8}">Earlier</text>
+        <text class="chart-axis" x="${width - margin.right}" y="${height - 8}" text-anchor="end">Latest</text>
       </svg>
       <div class="chart-legend"><span class="pill">${escapeHtml(preferred)}</span>${legend}</div>
     </div>`;
@@ -989,7 +1005,7 @@
         ? `<span class="pill">${escapeHtml(row.availability.replaceAll("_", " "))}</span>`
         : "";
       return `<tr>
-        <td><span class="cell-title">${escapeHtml(row.name)}</span>${row.key === "own" ? '<span class="cell-subtitle">Your store</span>' : ""}</td>
+        <td><span class="cell-title">${escapeHtml(row.name)}</span></td>
         <td><span class="price">${escapeHtml(formatPrice(row.price, row.currency))}</span></td>
         <td><div class="button-row">${isLowest ? '<span class="pill accent">Lowest price</span>' : ""}${availability}</div></td>
         <td>${statusPill(row.status)}</td>
@@ -1031,7 +1047,7 @@
     }
     return `<form id="add-offer-form" novalidate>
       <fieldset>
-        <legend>Add competitor URL</legend>
+        <legend class="sr-only">Add competitor URL</legend>
         <div class="field-grid">
           <div class="field full">
             <label for="offer-competitor">Competitor <span class="required">Required</span></label>
@@ -1047,7 +1063,6 @@
         </div>
       </fieldset>
       <div class="form-actions">
-        <span class="form-status">A first check is queued after saving.</span>
         <button class="button primary" type="submit">Add URL</button>
       </div>
     </form>`;
@@ -1062,27 +1077,24 @@
     if (product.customer_id !== selectedCustomerId()) throw new ApiError(404, "product");
     const bundle = await loadProductBundle(product);
     state.data = { product, competitors, bundle };
+    utilityContext.textContent = product.name || "Product";
     const competitorsById = competitorMap(competitors);
     const trustedTime = latestTrustedTime(bundle);
     const productState = productStatus(bundle, competitorsById);
-    const actions = `<a class="button" href="${escapeHtml(appHref("/products"))}" data-nav>Back to products</a>`;
-    main.innerHTML = `<nav class="breadcrumb" aria-label="Breadcrumb">
-      <a href="${escapeHtml(appHref("/products"))}" data-nav>Products</a><span aria-hidden="true">/</span><span>${escapeHtml(product.name)}</span>
-    </nav>
-      ${pageHeading(state.customer.name, product.name, product.sku || "No SKU", actions)}
+    const actions = `<a class="button" href="${escapeHtml(appHref("/products"))}" data-nav>Back to products</a>
+      <button class="button danger" type="button" data-action="delete-product" data-product-id="${escapeHtml(product.id)}">Remove product</button>`;
+    main.innerHTML = `${pageHeading(product.name, actions)}
       ${partialNotice()}
       <section class="summary-strip" aria-label="Product summary">
         <span class="price">${escapeHtml(formatPrice(product.current_own_price, product.currency))}</span>
         ${statusPill(productState)}
-        <span><strong>${bundle.offers.length}</strong> competitor offer${bundle.offers.length === 1 ? "" : "s"}</span>
         <span class="summary-spacer"></span>
-        ${trustedTime ? `<span class="exact-time">Last trusted ${escapeHtml(formatExactTime(trustedTime))}</span>` : '<span class="exact-time">No trusted observation</span>'}
+        ${trustedTime ? `<span>Updated ${escapeHtml(formatRelativeTime(trustedTime))}</span>` : '<span>No trusted price</span>'}
       </section>
       <div class="stack">
         <section class="panel" aria-labelledby="offers-title">
           <div class="panel-heading">
-            <div class="panel-heading-copy"><span class="eyebrow">Comparison</span><h2 id="offers-title">All offers</h2></div>
-            <span class="pill">Lowest marked per currency</span>
+            <div class="panel-heading-copy"><h2 id="offers-title">All offers</h2></div>
           </div>
           ${bundle.offers.length || product.current_own_price !== null ? `<div class="table-wrap"><table>
             <caption class="sr-only">Own and competitor offers</caption>
@@ -1092,19 +1104,19 @@
         </section>
         <div class="workspace-grid">
           <section class="panel" aria-labelledby="chart-title">
-            <div class="panel-heading"><div class="panel-heading-copy"><span class="eyebrow">History</span><h2 id="chart-title">Accepted prices</h2></div><span class="pill">Trusted only</span></div>
+            <div class="panel-heading"><div class="panel-heading-copy"><h2 id="chart-title">Accepted prices</h2></div></div>
             ${chartMarkup(bundle, competitorsById)}
           </section>
           <section class="panel" aria-labelledby="connect-title">
-            <div class="panel-heading"><div class="panel-heading-copy"><span class="eyebrow">Monitor</span><h2 id="connect-title">Competitor URL</h2></div></div>
+            <div class="panel-heading"><div class="panel-heading-copy"><h2 id="connect-title">Competitor URL</h2></div></div>
             ${addCompetitorUrlPanel(bundle, competitors)}
           </section>
         </div>
         <section class="panel" aria-labelledby="history-title">
-          <div class="panel-heading"><div class="panel-heading-copy"><span class="eyebrow">Changes</span><h2 id="history-title">Price history</h2></div><span class="pill">${bundle.history.length}</span></div>
+          <div class="panel-heading"><div class="panel-heading-copy"><h2 id="history-title">Price history</h2></div></div>
           <div class="table-wrap"><table>
             <caption class="sr-only">Accepted price observations</caption>
-            <thead><tr><th scope="col">Competitor</th><th scope="col">Price</th><th scope="col">Change</th><th scope="col">Observed</th></tr></thead>
+            <thead><tr><th scope="col">Competitor</th><th scope="col">Price</th><th scope="col">Change</th><th scope="col">Age</th></tr></thead>
             <tbody>${historyRows(bundle, competitorsById)}</tbody>
           </table></div>
         </section>
@@ -1114,13 +1126,11 @@
   function productFormMarkup(competitors) {
     const activeCompetitors = competitors.filter((competitor) => competitor.is_active);
     const unavailable = activeCompetitors.length === 0;
-    return `<div class="workspace-grid">
-      <section class="panel" aria-labelledby="new-product-title">
+    return `<section class="panel form-panel" aria-labelledby="new-product-title">
         <div class="panel-heading">
-          <div class="panel-heading-copy"><span class="eyebrow">Catalog</span><h2 id="new-product-title">Product and competitor</h2></div>
-          <span class="pill accent">One setup</span>
+          <div class="panel-heading-copy"><h2 id="new-product-title">Product and competitor</h2></div>
         </div>
-        ${unavailable ? `<div class="notice warning"><strong>No configured competitor.</strong> Add one before starting product monitoring.</div>` : ""}
+        ${unavailable ? `<div class="notice warning"><strong>No competitor.</strong> <a class="text-link" href="${escapeHtml(appHref("/competitors"))}" data-nav>Add competitor</a></div>` : ""}
         <form id="product-form" novalidate>
           <fieldset>
             <legend>Product</legend>
@@ -1165,32 +1175,18 @@
             </div>
           </fieldset>
           <div class="form-actions">
-            <span class="form-status">The first check is queued automatically.</span>
             <a class="button" href="${escapeHtml(appHref("/products"))}" data-nav>Cancel</a>
             <button class="button primary" type="submit" ${unavailable ? 'disabled data-permanent-disabled="true"' : ""}>Add product</button>
           </div>
         </form>
-      </section>
-      <aside class="panel" aria-labelledby="setup-title">
-        <div class="panel-heading"><div class="panel-heading-copy"><span class="eyebrow">Setup</span><h2 id="setup-title">What happens next</h2></div></div>
-        <ol class="plain-list">
-          <li><div><h3>Product saved</h3><span class="muted">Your catalog record is created.</span></div><span class="pill">1</span></li>
-          <li><div><h3>URL connected</h3><span class="muted">The competitor offer is mapped.</span></div><span class="pill">2</span></li>
-          <li><div><h3>Check queued</h3><span class="muted">A worker records the first trusted price.</span></div><span class="pill">3</span></li>
-        </ol>
-        ${unavailable ? `<div class="panel-body"><a class="button primary" href="${escapeHtml(appHref("/competitors"))}" data-nav>Configure competitor</a></div>` : ""}
-      </aside>
-    </div>`;
+      </section>`;
   }
 
   async function renderAddProduct() {
     main.innerHTML = loadingMarkup("Loading product setup");
     const { competitors } = await loadCoreData();
     state.data = { competitors };
-    main.innerHTML = `<nav class="breadcrumb" aria-label="Breadcrumb">
-      <a href="${escapeHtml(appHref("/products"))}" data-nav>Products</a><span aria-hidden="true">/</span><span>Add product</span>
-    </nav>
-      ${pageHeading(state.customer.name, "Add product", "Save a product, connect one competitor, and start checking.")}
+    main.innerHTML = `${pageHeading("Add product")}
       ${partialNotice()}
       ${productFormMarkup(competitors)}`;
   }
@@ -1261,7 +1257,7 @@
     }
     return `<form id="competitor-form" novalidate>
       <fieldset>
-        <legend>Add competitor</legend>
+        <legend class="sr-only">Add competitor</legend>
         <div class="field-grid">
           <div class="field full">
             <label for="competitor-name">Name <span class="required">Required</span></label>
@@ -1292,7 +1288,7 @@
     main.innerHTML = loadingMarkup("Loading competitors");
     const data = await loadCompetitorData();
     state.data = data;
-    main.innerHTML = `${pageHeading(state.customer.name, "Competitors", "Configured sources and scraper health.")}
+    main.innerHTML = `${pageHeading("Competitors")}
       ${partialNotice()}
       <div class="filters">
         <div class="filter-row" role="group" aria-label="Competitor health">
@@ -1301,7 +1297,7 @@
       </div>
       <div class="workspace-grid">
         <section class="panel" aria-labelledby="competitor-list-title">
-          <div class="panel-heading"><div class="panel-heading-copy"><span class="eyebrow">Sources</span><h2 id="competitor-list-title">Monitoring health</h2></div><span class="pill" id="competitor-result-count">${data.competitors.length}</span></div>
+          <div class="panel-heading"><div class="panel-heading-copy"><h2 id="competitor-list-title">Monitoring health</h2></div><span class="pill" id="competitor-result-count">${data.competitors.length}</span></div>
           ${data.competitors.length ? `<div class="table-wrap"><table id="competitors-table">
             <caption class="sr-only">Competitors and scraper health</caption>
             <thead><tr><th scope="col">Competitor</th><th scope="col">URLs</th><th scope="col">Health</th><th scope="col">Failures</th><th scope="col">Last success</th><th scope="col">Schedule</th></tr></thead>
@@ -1309,7 +1305,7 @@
           </table></div><div class="empty-state compact" id="competitor-filter-empty" hidden><h2>No matches</h2><p>Try another status.</p></div>` : emptyState("No competitors", "Add a trusted source before connecting product URLs.")}
         </section>
         <aside class="panel" aria-labelledby="add-competitor-title">
-          <div class="panel-heading"><div class="panel-heading-copy"><span class="eyebrow">Setup</span><h2 id="add-competitor-title">New competitor</h2></div></div>
+          <div class="panel-heading"><div class="panel-heading-copy"><h2 id="add-competitor-title">New competitor</h2></div></div>
           ${competitorSetupPanel(data.adapters)}
         </aside>
       </div>`;
@@ -1382,7 +1378,7 @@
     const triggered = rules.filter((rule) => rule.evaluation?.state === "triggered" && rule.is_active);
     if (!triggered.length) return "";
     return `<section class="panel" aria-labelledby="triggered-alerts-title">
-      <div class="panel-heading"><div class="panel-heading-copy"><span class="eyebrow">Attention</span><h2 id="triggered-alerts-title">Triggered alerts</h2></div><span class="pill triggered">${triggered.length}</span></div>
+      <div class="panel-heading"><div class="panel-heading-copy"><h2 id="triggered-alerts-title">Triggered alerts</h2></div><span class="pill triggered">${triggered.length}</span></div>
       <ul class="attention-list">
         ${triggered.map((rule) => {
           const evaluation = rule.evaluation;
@@ -1410,7 +1406,7 @@
     }
     return `<form id="alert-form" novalidate>
       <fieldset>
-        <legend>New alert</legend>
+        <legend class="sr-only">New alert</legend>
         <div class="field-grid">
           <div class="field full">
             <label for="alert-product">Product <span class="required">Required</span></label>
@@ -1429,7 +1425,6 @@
           <div class="field">
             <label for="alert-threshold">Threshold</label>
             <input id="alert-threshold" name="threshold_percent" type="number" inputmode="decimal" min="0.1" step="0.1" value="5" required>
-            <span class="help">Percent change.</span>
           </div>
         </div>
       </fieldset>
@@ -1447,26 +1442,21 @@
     );
     state.data = { ...core, rules };
     const productsById = new Map(core.products.map((product) => [product.id, product]));
-    main.innerHTML = `${pageHeading(state.customer.name, "Alerts", "Important accepted price changes.")}
+    main.innerHTML = `${pageHeading("Alerts")}
       ${partialNotice()}
-      <section class="summary-strip" aria-label="Alert status">
-        <span><strong>${rules.length}</strong> rule${rules.length === 1 ? "" : "s"}</span>
-        <span><span class="pill accent">In-app</span></span>
-        <span class="muted">Email delivery unavailable</span>
-      </section>
       <div class="stack">
         ${triggeredAlertList(rules, productsById)}
         <div class="workspace-grid">
           <section class="panel" aria-labelledby="alert-rules-title">
-            <div class="panel-heading"><div class="panel-heading-copy"><span class="eyebrow">Rules</span><h2 id="alert-rules-title">Price alerts</h2></div><span class="pill">${rules.length}</span></div>
+            <div class="panel-heading"><div class="panel-heading-copy"><h2 id="alert-rules-title">Price alerts</h2></div></div>
             ${rules.length ? `<div class="table-wrap"><table>
               <caption class="sr-only">Configured in-app price alert rules</caption>
-              <thead><tr><th scope="col">Rule</th><th scope="col">State</th><th scope="col">Latest match</th><th scope="col">Checked</th><th scope="col">Actions</th></tr></thead>
+              <thead><tr><th scope="col">Rule</th><th scope="col">State</th><th scope="col">Latest match</th><th scope="col">Last check</th><th scope="col">Actions</th></tr></thead>
               <tbody>${alertRuleRows(rules, productsById)}</tbody>
             </table></div>` : emptyState("No alerts", "Create one rule for an important price move.")}
           </section>
           <aside class="panel" aria-labelledby="new-alert-title">
-            <div class="panel-heading"><div class="panel-heading-copy"><span class="eyebrow">Configure</span><h2 id="new-alert-title">Add rule</h2></div></div>
+            <div class="panel-heading"><div class="panel-heading-copy"><h2 id="new-alert-title">Add rule</h2></div></div>
             ${alertForm(core.products)}
           </aside>
         </div>
@@ -1475,13 +1465,12 @@
 
   function workspaceSetupMarkup() {
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-    return `${pageHeading("First setup", "Create workspace", "Add your store before monitoring competitor prices.")}
-      <div class="workspace-grid">
-        <section class="panel" aria-labelledby="workspace-form-title">
-          <div class="panel-heading"><div class="panel-heading-copy"><span class="eyebrow">Workspace</span><h2 id="workspace-form-title">Store details</h2></div></div>
+    return `${pageHeading("Create workspace")}
+        <section class="panel form-panel" aria-labelledby="workspace-form-title">
+          <div class="panel-heading"><div class="panel-heading-copy"><h2 id="workspace-form-title">Store details</h2></div></div>
           <form id="workspace-form" novalidate>
             <fieldset>
-              <legend>Your store</legend>
+              <legend class="sr-only">Your store</legend>
               <div class="field-grid">
                 <div class="field full"><label for="workspace-name">Name <span class="required">Required</span></label><input id="workspace-name" name="name" maxlength="200" required autofocus></div>
                 <div class="field"><label for="workspace-slug">Short name <span class="required">Required</span></label><input id="workspace-slug" name="slug" maxlength="100" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required><span class="help">Lowercase letters and dashes.</span></div>
@@ -1492,9 +1481,7 @@
             </fieldset>
             <div class="form-actions"><button class="button primary" type="submit">Create workspace</button></div>
           </form>
-        </section>
-        <aside class="panel"><div class="panel-heading"><div class="panel-heading-copy"><span class="eyebrow">Next</span><h2>Configure one competitor</h2></div></div><div class="panel-body"><p class="muted">Then add a product and its matching competitor URL.</p><span class="pill">About 2 minutes</span></div></aside>
-      </div>`;
+        </section>`;
   }
 
   async function sessionRequest(method = "GET", accessKey = null) {
@@ -1527,7 +1514,12 @@
   }
 
   function updateSessionControl() {
-    sessionLogout.hidden = !(state.session?.protected && state.session?.authenticated);
+    const authenticated = Boolean(state.session?.protected && state.session?.authenticated);
+    sessionLogout.hidden = !authenticated;
+    document.body.classList.toggle(
+      "access-mode",
+      Boolean(state.session?.protected && !state.session?.authenticated),
+    );
   }
 
   function renderAccess(error = "") {
@@ -1536,13 +1528,13 @@
     updateHeader(parseRoute());
     updateSessionControl();
     document.title = "Access required · Price Monitor";
-    main.innerHTML = `<div class="workspace-grid access-layout">
-      <section class="panel" aria-labelledby="access-title">
-        <div class="panel-heading"><div class="panel-heading-copy"><span class="eyebrow">Protected workspace</span><h2 id="access-title">Operator access</h2></div><span class="pill">Private</span></div>
+    utilityContext.textContent = "Access";
+    main.innerHTML = `<section class="panel form-panel access-panel" aria-labelledby="access-title">
+        <div class="panel-heading"><div class="panel-heading-copy"><h2 id="access-title">Operator access</h2></div><span class="pill">Private</span></div>
         ${error ? `<div class="notice error" role="alert">${escapeHtml(error)}</div>` : ""}
         <form id="session-form" novalidate>
           <fieldset>
-            <legend>Access key</legend>
+            <legend class="sr-only">Access key</legend>
             <div class="field full">
               <label for="access-key">Access key <span class="required">Required</span></label>
               <input id="access-key" name="access_key" type="password" autocomplete="current-password" autocapitalize="none" spellcheck="false" required autofocus>
@@ -1551,15 +1543,13 @@
           </fieldset>
           <div class="form-actions"><button class="button primary" type="submit">Continue</button></div>
         </form>
-      </section>
-      <aside class="panel"><div class="panel-heading"><div class="panel-heading-copy"><span class="eyebrow">Security</span><h2>Your key stays private</h2></div></div><div class="panel-body"><p class="muted">Price Monitor uses a protected, same-site session. Signing out clears it.</p></div></aside>
-    </div>`;
+      </section>`;
     main.removeAttribute("aria-busy");
   }
 
   function renderMissing() {
+    utilityContext.textContent = "Not found";
     main.innerHTML = `<div class="error-state">
-      <span class="eyebrow">Not found</span>
       <h1>This page is unavailable</h1>
       <p>The address may be old or incomplete.</p>
       <a class="button primary" href="${escapeHtml(appHref("/"))}" data-nav>Back to overview</a>
@@ -1568,8 +1558,8 @@
 
   function renderMissingProduct() {
     document.title = "Product not found · Price Monitor";
+    utilityContext.textContent = "Product not found";
     main.innerHTML = `<div class="error-state" role="alert">
-      <span class="eyebrow">Product not found</span>
       <h1>This product is unavailable</h1>
       <p>It may have been removed or belongs to another workspace.</p>
       <div class="button-row">
@@ -1601,6 +1591,7 @@
       updateHeader(state.route);
       if (!state.customer) {
         document.title = "Create workspace · Price Monitor";
+        utilityContext.textContent = "Create workspace";
         main.innerHTML = workspaceSetupMarkup();
         main.removeAttribute("aria-busy");
         return;
@@ -1678,6 +1669,57 @@
     setFormBusy(form, true, "Creating");
     try {
       const customer = await request("/customers", { method: "POST", body: payload, kind: "workspace" });
+      await navigate(`/?customer=${encodeURIComponent(customer.id)}`);
+      showToast("Workspace created.");
+    } catch (error) {
+      setFormBusy(form, false);
+      showToast(safeActionMessage(error, "Workspace"), "error");
+    }
+  }
+
+  async function submitWorkspaceRename(form) {
+    if (!form.reportValidity()) return;
+    const customerId = selectedCustomerId();
+    if (!customerId) return;
+    const name = String(new FormData(form).get("name") || "").trim();
+    setFormBusy(form, true, "Saving");
+    try {
+      const customer = await request(`/customers/${customerId}`, {
+        method: "PATCH",
+        body: { name },
+        kind: "workspace",
+      });
+      state.customer = customer;
+      state.customers = state.customers.map((item) => item.id === customer.id ? customer : item);
+      updateHeader(state.route || parseRoute());
+      closeWorkspaceDialog();
+      showToast("Workspace renamed.");
+    } catch (error) {
+      setFormBusy(form, false);
+      showToast(safeActionMessage(error, "Workspace"), "error");
+    }
+  }
+
+  async function submitWorkspaceCreate(form) {
+    if (!form.reportValidity()) return;
+    const data = new FormData(form);
+    const name = String(data.get("name") || "").trim();
+    const baseSlug = slugify(name).slice(0, 90) || "workspace";
+    const payload = {
+      name,
+      slug: `${baseSlug}-${crypto.randomUUID().slice(0, 8)}`,
+      webshop_url: String(data.get("webshop_url") || "").trim(),
+      default_currency: String(data.get("default_currency") || "USD").trim().toUpperCase(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+    };
+    setFormBusy(form, true, "Creating");
+    try {
+      const customer = await request("/customers", {
+        method: "POST",
+        body: payload,
+        kind: "workspace",
+      });
+      closeWorkspaceDialog();
       await navigate(`/?customer=${encodeURIComponent(customer.id)}`);
       showToast("Workspace created.");
     } catch (error) {
@@ -1895,6 +1937,25 @@
     }
   }
 
+  async function deleteProduct(button) {
+    const productId = safeId(button.dataset.productId);
+    if (!productId) return;
+    const name = state.data?.product?.name || "this product";
+    if (!window.confirm(`Remove ${name}? Price history, competitor URLs, and alerts for this product will also be removed.`)) return;
+    button.disabled = true;
+    try {
+      await request(`/products/${productId}`, {
+        method: "DELETE",
+        kind: "product",
+      });
+      await navigate(appHref("/products"));
+      showToast("Product removed.");
+    } catch (error) {
+      button.disabled = false;
+      showToast(safeActionMessage(error, "Product"), "error");
+    }
+  }
+
   function slugify(value) {
     return String(value)
       .normalize("NFKD")
@@ -1918,7 +1979,8 @@
 
     const action = event.target.closest("[data-action]");
     if (action) {
-      if (action.dataset.action === "retry") await renderRoute({ focus: true });
+      if (action.dataset.action === "close-workspace-dialog") closeWorkspaceDialog();
+      else if (action.dataset.action === "retry") await renderRoute({ focus: true });
       else if (action.dataset.action === "product-filter") {
         state.productFilter = action.dataset.filter;
         document.querySelectorAll('[data-action="product-filter"]').forEach((button) => {
@@ -1932,6 +1994,7 @@
         });
         applyCompetitorFilters();
       } else if (action.dataset.action === "check-now") await checkNow(action);
+      else if (action.dataset.action === "delete-product") await deleteProduct(action);
       else if (action.dataset.action === "toggle-alert") await toggleAlert(action);
       else if (action.dataset.action === "delete-alert") await deleteAlert(action);
       return;
@@ -1948,6 +2011,8 @@
     event.preventDefault();
     if (form.id === "session-form") await submitSession(form);
     else if (form.id === "workspace-form") await submitWorkspace(form);
+    else if (form.id === "workspace-rename-form") await submitWorkspaceRename(form);
+    else if (form.id === "workspace-create-form") await submitWorkspaceCreate(form);
     else if (form.id === "product-form") await submitProduct(form);
     else if (form.id === "add-offer-form") await submitOffer(form);
     else if (form.id === "competitor-form") await submitCompetitor(form);
@@ -1964,7 +2029,7 @@
       if (slug && !slug.dataset.edited) slug.value = slugify(event.target.value);
     }
     if (event.target.id === "workspace-slug") event.target.dataset.edited = "true";
-    if (["own-currency", "competitor-currency", "workspace-currency"].includes(event.target.id)) {
+    if (["own-currency", "competitor-currency", "workspace-currency", "workspace-create-currency"].includes(event.target.id)) {
       const start = event.target.selectionStart;
       event.target.value = event.target.value.toUpperCase();
       event.target.setSelectionRange(start, start);
@@ -1980,9 +2045,28 @@
   });
 
   workspaceSelect.addEventListener("change", async () => {
-    const customerId = safeId(workspaceSelect.value);
+    const selection = workspaceSelect.value;
+    if (selection === "__rename__") {
+      workspaceSelect.value = selectedCustomerId();
+      openWorkspaceDialog("rename");
+      return;
+    }
+    if (selection === "__create__") {
+      workspaceSelect.value = selectedCustomerId();
+      openWorkspaceDialog("create");
+      return;
+    }
+    const customerId = safeId(selection);
     if (!customerId) return;
     await navigate(`/?customer=${encodeURIComponent(customerId)}`);
+  });
+
+  workspaceDialog.addEventListener("click", (event) => {
+    if (event.target === workspaceDialog) closeWorkspaceDialog();
+  });
+
+  workspaceDialog.addEventListener("close", () => {
+    workspaceSelect.value = selectedCustomerId();
   });
 
   sessionLogout.addEventListener("click", async () => {
