@@ -1,16 +1,39 @@
 from __future__ import annotations
 
-import fcntl
 import hashlib
 import json
 import os
 import re
+import sys
 import tempfile
 from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import BinaryIO, Literal, TypedDict
+
+if sys.platform == "win32":
+    import msvcrt
+
+    def _acquire_file_lock(stream: BinaryIO) -> None:
+        stream.seek(0, os.SEEK_END)
+        if stream.tell() == 0:
+            stream.write(b"\0")
+            stream.flush()
+        stream.seek(0)
+        msvcrt.locking(stream.fileno(), msvcrt.LK_LOCK, 1)
+
+    def _release_file_lock(stream: BinaryIO) -> None:
+        stream.seek(0)
+        msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+else:
+    import fcntl
+
+    def _acquire_file_lock(stream: BinaryIO) -> None:
+        fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+
+    def _release_file_lock(stream: BinaryIO) -> None:
+        fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 from price_monitor.scrapers.spec import SiteSpec
 
@@ -295,11 +318,11 @@ class SpecVersionStore:
         path = self._safe_path("locks", f"{key}.lock")
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a+b") as stream:
-            fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+            _acquire_file_lock(stream)
             try:
                 yield
             finally:
-                fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+                _release_file_lock(stream)
 
     def _safe_path(self, *parts: str) -> Path:
         if any(part in {"", ".", ".."} or "/" in part or "\\" in part for part in parts):
@@ -374,10 +397,11 @@ class SpecVersionStore:
                 stream.flush()
                 os.fsync(stream.fileno())
             os.replace(temporary, path)
-            directory_descriptor = os.open(path.parent, os.O_RDONLY)
-            try:
-                os.fsync(directory_descriptor)
-            finally:
-                os.close(directory_descriptor)
+            if sys.platform != "win32":
+                directory_descriptor = os.open(path.parent, os.O_RDONLY)
+                try:
+                    os.fsync(directory_descriptor)
+                finally:
+                    os.close(directory_descriptor)
         finally:
             temporary.unlink(missing_ok=True)
